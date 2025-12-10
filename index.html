@@ -3,84 +3,104 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Futuristic Particle Hand Control</title>
+    <title>Advanced Particle Gestures</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
+        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
         canvas { display: block; }
         
-        /* UI Overlay */
-        #ui-container {
+        #ui-overlay {
             position: absolute;
             top: 20px;
             left: 20px;
-            background: rgba(0, 20, 40, 0.8);
-            border: 1px solid #00d2ff;
-            padding: 20px;
-            border-radius: 8px;
-            color: #fff;
-            backdrop-filter: blur(5px);
-            width: 280px;
-            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+            pointer-events: none; /* Dejar pasar clicks al canvas si fuera necesario */
             z-index: 10;
         }
 
-        h2 { margin-top: 0; font-size: 1.2rem; color: #00d2ff; text-transform: uppercase; letter-spacing: 1px; }
-        
-        .control-group { margin-bottom: 15px; }
-        label { display: block; font-size: 0.9rem; margin-bottom: 5px; color: #aaa; }
-        
-        input[type="range"] { width: 100%; cursor: pointer; accent-color: #00d2ff; }
-        select { width: 100%; padding: 5px; background: #001020; color: white; border: 1px solid #444; border-radius: 4px; }
-        
-        .status { font-size: 0.8rem; margin-top: 10px; color: #00ff88; }
-        .loading { color: #ffaa00; }
+        .hud-panel {
+            background: rgba(10, 20, 30, 0.85);
+            border-left: 3px solid #00ffcc;
+            padding: 15px 25px;
+            color: #fff;
+            backdrop-filter: blur(8px);
+            margin-bottom: 10px;
+            width: 280px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.1);
+            font-size: 0.9rem;
+            border-radius: 0 10px 10px 0;
+            transition: all 0.3s ease;
+        }
 
-        /* Video oculto para MediaPipe */
-        #video-input { display: none; transform: scaleX(-1); }
+        h2 { margin: 0 0 10px 0; font-size: 1.1rem; color: #00ffcc; text-transform: uppercase; letter-spacing: 2px; }
+        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; color: #aaa; }
+        .data-val { color: #fff; font-weight: bold; }
+        
+        .gesture-icon {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #333;
+            margin-right: 5px;
+        }
+        .active-gesture { background: #00ffcc; box-shadow: 0 0 10px #00ffcc; }
 
-        /* Instrucciones */
-        #instructions {
+        #tutorial {
             position: absolute;
-            bottom: 20px;
+            bottom: 30px;
             width: 100%;
             text-align: center;
-            color: rgba(255,255,255,0.5);
+            color: rgba(255,255,255,0.6);
             pointer-events: none;
             font-size: 0.9rem;
+            text-shadow: 0 0 5px rgba(0,0,0,0.8);
         }
+        
+        .key { color: #00ffcc; font-weight: bold; }
+
+        #video-input { display: none; transform: scaleX(-1); }
+        
+        /* Animación de carga */
+        #loader {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            color: #00ffcc;
+            font-size: 1.5rem;
+            text-transform: uppercase;
+            letter-spacing: 5px;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
     </style>
 </head>
 <body>
 
-    <div id="ui-container">
-        <h2>Control de Partículas</h2>
-        
-        <div class="control-group">
-            <label for="particleCount">Densidad (Recargar para aplicar)</label>
-            <input type="range" id="particleCount" min="10000" max="100000" step="10000" value="50000">
-            <span id="countValue">50000</span>
+    <div id="loader">Inicializando Neural Core...</div>
+
+    <div id="ui-overlay">
+        <div class="hud-panel">
+            <h2>Estado del Sistema</h2>
+            <div class="data-row"><span>Partículas</span> <span class="data-val">60,000</span></div>
+            <div class="data-row"><span>Geometría</span> <span class="data-val" id="shape-name">ESFERA</span></div>
+            <div class="data-row"><span>FPS</span> <span class="data-val" id="fps-counter">60</span></div>
         </div>
 
-        <div class="control-group">
-            <label for="colorScheme">Esquema de Color</label>
-            <select id="colorScheme">
-                <option value="cyan">Cyberpunk Cyan</option>
-                <option value="fire">Solar Fire</option>
-                <option value="matrix">Matrix Green</option>
-                <option value="white">Pure Starlight</option>
-            </select>
+        <div class="hud-panel">
+            <h2>Mano Izquierda</h2>
+            <div class="data-row"><span id="l-gesture">Detectando...</span> <div id="l-led" class="gesture-icon"></div></div>
         </div>
 
-        <div class="control-group">
-            <label for="forceStrength">Fuerza de Interacción</label>
-            <input type="range" id="forceStrength" min="0.1" max="3.0" step="0.1" value="1.0">
+        <div class="hud-panel">
+            <h2>Mano Derecha</h2>
+            <div class="data-row"><span id="r-gesture">Detectando...</span> <div id="r-led" class="gesture-icon"></div></div>
         </div>
-
-        <div id="status" class="status loading">Iniciando cámara e IA...</div>
     </div>
 
-    <div id="instructions">
-        Mano Abierta: <b>Repeler</b> | Puño Cerrado: <b>Absorber</b> | Dos manos: <b>Caos</b>
+    <div id="tutorial">
+        <span class="key">PUÑO:</span> Absorber | 
+        <span class="key">MANO ABIERTA:</span> Escudo | 
+        <span class="key">PELLIZCO:</span> Crear Estrella | 
+        <span class="key">JUNTAR MANOS:</span> Cambiar Forma
     </div>
 
     <video id="video-input"></video>
@@ -103,221 +123,322 @@
         import * as THREE from 'three';
         import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // ==========================================
-        // CONFIGURACIÓN GLOBAL
-        // ==========================================
+        // CONFIGURACIÓN
         const config = {
-            particleCount: 50000,
-            forceStrength: 1.0,
-            baseColor: new THREE.Color(0x00d2ff),
-            secondaryColor: new THREE.Color(0x0044ff),
-            hand1: { x: 9999, y: 9999, active: 0.0, state: 0.0 }, // state: 0=open, 1=closed
-            hand2: { x: 9999, y: 9999, active: 0.0, state: 0.0 }
+            count: 60000,
+            shapes: ['SPHERE', 'CUBE', 'TORUS'],
+            currentShapeIndex: 0,
+            handInteractionThreshold: 0.15, // Distancia para juntar manos
+            colors: {
+                base: new THREE.Color(0x00ffcc),
+                accent: new THREE.Color(0xaa00ff),
+                pinch: new THREE.Color(0xffaa00)
+            }
         };
 
-        let scene, camera, renderer, material, points, controls;
+        let scene, camera, renderer, material, points;
         let time = 0;
+        let lastShapeSwitchTime = 0;
 
-        // ==========================================
-        // SHADERS (GLSL)
-        // ==========================================
-        
-        // Vertex Shader: Maneja la posición y la física de "desplazamiento"
+        // Estado de Manos
+        const handsData = {
+            left: { x: 0, y: 0, active: 0, gesture: 0, pinch: 0 }, // Gesture: 0=Open, 1=Fist. Pinch: 0=No, 1=Yes
+            right: { x: 0, y: 0, active: 0, gesture: 0, pinch: 0 }
+        };
+
+        // --- SHADERS AVANZADOS ---
+
         const vertexShader = `
             uniform float uTime;
-            uniform float uSize;
-            uniform vec3 uHand1Pos;
-            uniform float uHand1State; // 0.0 repel (open), 1.0 attract (closed)
-            uniform float uHand1Active;
+            uniform float uMorphFactor; // 0 to 1 transition
+            uniform float uShapeType;   // 0, 1, 2
             
-            uniform vec3 uHand2Pos;
-            uniform float uHand2State;
-            uniform float uHand2Active;
-            
-            uniform float uForceStrength;
+            // Hand Uniforms
+            uniform vec3 uHandLPos;
+            uniform float uHandLActive;
+            uniform float uHandLGesture; // 0=Open (Repel), 1=Fist (Attract)
+            uniform float uHandLPinch;   // 1=Pinch (Gravity point)
 
-            attribute float aScale;
-            attribute vec3 aRandom; // Random values for noise
+            uniform vec3 uHandRPos;
+            uniform float uHandRActive;
+            uniform float uHandRGesture;
+            uniform float uHandRPinch;
+
+            attribute vec3 aPosSphere;
+            attribute vec3 aPosCube;
+            attribute vec3 aPosTorus;
+            attribute float aRandom;
 
             varying vec3 vColor;
-            varying float vDistanceToHand;
+            varying float vAlpha;
 
-            // Función simple de ruido pseudo-aleatorio
-            float random(vec2 st) {
-                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            // Simplex Noise auxiliar
+            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
+            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
+            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
+            float snoise(vec3 v) {
+                const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+                const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+                vec3 i  = floor(v + dot(v, C.yyy) );
+                vec3 x0 = v - i + dot(i, C.xxx) ;
+                vec3 g = step(x0.yzx, x0.xyz);
+                vec3 l = 1.0 - g;
+                vec3 i1 = min( g.xyz, l.zxy );
+                vec3 i2 = max( g.xyz, l.zxy );
+                vec3 x1 = x0 - i1 + C.xxx;
+                vec3 x2 = x0 - i2 + C.yyy;
+                vec3 x3 = x0 - D.yyy;
+                i = mod289(i);
+                vec4 p = permute( permute( permute(
+                            i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+                float n_ = 0.142857142857;
+                vec3  ns = n_ * D.wyz - D.xzx;
+                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+                vec4 x_ = floor(j * ns.z);
+                vec4 y_ = floor(j - 7.0 * x_ );
+                vec4 x = x_ *ns.x + ns.yyyy;
+                vec4 y = y_ *ns.x + ns.yyyy;
+                vec4 h = 1.0 - abs(x) - abs(y);
+                vec4 b0 = vec4( x.xy, y.xy );
+                vec4 b1 = vec4( x.zw, y.zw );
+                vec4 s0 = floor(b0)*2.0 + 1.0;
+                vec4 s1 = floor(b1)*2.0 + 1.0;
+                vec4 sh = -step(h, vec4(0.0));
+                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+                vec3 p0 = vec3(a0.xy,h.x);
+                vec3 p1 = vec3(a0.zw,h.y);
+                vec3 p2 = vec3(a1.xy,h.z);
+                vec3 p3 = vec3(a1.zw,h.w);
+                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+                m = m * m;
+                return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
+            }
+
+            // Curl Noise para movimiento fluido
+            vec3 curlNoise(vec3 p) {
+                float e = 0.1;
+                float n1 = snoise(p + vec3(e, 0, 0));
+                float n2 = snoise(p + vec3(-e, 0, 0));
+                float n3 = snoise(p + vec3(0, e, 0));
+                float n4 = snoise(p + vec3(0, -e, 0));
+                float n5 = snoise(p + vec3(0, 0, e));
+                float n6 = snoise(p + vec3(0, 0, -e));
+                return vec3(n3 - n4 - (n5 - n6), n5 - n6 - (n1 - n2), n1 - n2 - (n3 - n4));
             }
 
             void main() {
-                vec3 pos = position;
+                // 1. MORPHING DE GEOMETRÍA
+                // Seleccionamos la posición base interpolando entre las figuras
+                vec3 basePos = aPosSphere;
+                vec3 targetPos = aPosSphere;
+                
+                // Lógica de mezcla cíclica simple (Sphere -> Cube -> Torus)
+                // Usamos un enfoque simplificado para el demo:
+                // Si uShapeType está cerca de 0: Sphere, 1: Cube, 2: Torus
+                // Interpolamos suavemente usando uMorphFactor (que irá de 0 a 1)
+                
+                // Determinar origen y destino basado en uShapeType entero
+                if(uShapeType < 0.5) { // 0: Sphere -> Cube
+                    basePos = aPosSphere; targetPos = aPosCube;
+                } else if (uShapeType < 1.5) { // 1: Cube -> Torus
+                    basePos = aPosCube; targetPos = aPosTorus;
+                } else { // 2: Torus -> Sphere
+                    basePos = aPosTorus; targetPos = aPosSphere;
+                }
+                
+                vec3 pos = mix(basePos, targetPos, uMorphFactor);
 
-                // 1. Movimiento base orgánico (Noise field simple)
-                float noiseFreq = 0.5;
-                float noiseAmp = 0.4;
-                pos.x += sin(uTime * 0.5 + pos.y * noiseFreq) * noiseAmp;
-                pos.y += cos(uTime * 0.3 + pos.z * noiseFreq) * noiseAmp;
-                pos.z += sin(uTime * 0.4 + pos.x * noiseFreq) * noiseAmp;
+                // 2. RUIDO ORGÁNICO
+                // Añadir turbulencia fluida
+                vec3 noise = curlNoise(pos * 0.1 + uTime * 0.2);
+                pos += noise * 0.5;
 
-                // 2. Interacción con Mano 1
-                if (uHand1Active > 0.5) {
-                    float d = distance(pos, uHand1Pos);
-                    // Radio de influencia
-                    float radius = 5.0; 
+                // 3. COLOR BASE
+                vec3 finalColor = vec3(0.0, 0.8, 0.9); // Cyan base
+                
+                // 4. INTERACCIÓN CON MANOS
+                
+                // --- MANO IZQUIERDA ---
+                if (uHandLActive > 0.5) {
+                    float d = distance(pos, uHandLPos);
+                    float influence = smoothstep(6.0, 0.0, d); // Radio 6
                     
-                    if (d < radius) {
-                        float force = (radius - d) / radius; // 1.0 en el centro, 0.0 en el borde
-                        force = pow(force, 2.0) * uForceStrength * 3.0;
-
-                        if (uHand1State > 0.5) {
-                            // PUÑO CERRADO: Atracción (Absorber)
-                            // Interpolamos hacia la mano
-                            pos = mix(pos, uHand1Pos, force * 0.1);
+                    if (influence > 0.0) {
+                        if (uHandLPinch > 0.5) {
+                            // PINCH: Gravedad fuerte y localizada + cambio de color
+                            vec3 dir = uHandLPos - pos;
+                            pos += dir * influence * 0.8; // Atracción fuerte
+                            finalColor = mix(finalColor, vec3(1.0, 0.6, 0.0), influence); // Naranja
+                        } else if (uHandLGesture > 0.5) {
+                            // PUÑO: Agujero Negro (Succión masiva)
+                            vec3 dir = normalize(uHandLPos - pos);
+                            pos += dir * influence * 5.0 * (1.0 + sin(uTime * 10.0)*0.2); // Vibración
+                            finalColor = mix(finalColor, vec3(1.0, 0.0, 0.2), influence); // Rojo
                         } else {
-                            // MANO ABIERTA: Repulsión
-                            vec3 dir = normalize(pos - uHand1Pos);
-                            pos += dir * force;
-                        }
-                    }
-                    vDistanceToHand = d;
-                }
-
-                // 2. Interacción con Mano 2 (Idéntica lógica)
-                if (uHand2Active > 0.5) {
-                    float d = distance(pos, uHand2Pos);
-                    float radius = 5.0;
-                    if (d < radius) {
-                        float force = (radius - d) / radius;
-                        force = pow(force, 2.0) * uForceStrength * 3.0;
-                        if (uHand2State > 0.5) {
-                            pos = mix(pos, uHand2Pos, force * 0.1);
-                        } else {
-                            vec3 dir = normalize(pos - uHand2Pos);
-                            pos += dir * force;
+                            // MANO ABIERTA: Repulsión (Escudo)
+                            vec3 dir = normalize(pos - uHandLPos);
+                            pos += dir * influence * 2.5; 
+                            finalColor += vec3(0.2) * influence; // Brillo blanco
                         }
                     }
                 }
 
+                // --- MANO DERECHA (Misma lógica) ---
+                if (uHandRActive > 0.5) {
+                    float d = distance(pos, uHandRPos);
+                    float influence = smoothstep(6.0, 0.0, d);
+                    
+                    if (influence > 0.0) {
+                        if (uHandRPinch > 0.5) {
+                            vec3 dir = uHandRPos - pos;
+                            pos += dir * influence * 0.8;
+                            finalColor = mix(finalColor, vec3(1.0, 0.6, 0.0), influence);
+                        } else if (uHandRGesture > 0.5) {
+                            vec3 dir = normalize(uHandRPos - pos);
+                            pos += dir * influence * 5.0;
+                            finalColor = mix(finalColor, vec3(1.0, 0.0, 0.2), influence);
+                        } else {
+                            vec3 dir = normalize(pos - uHandRPos);
+                            pos += dir * influence * 2.5;
+                        }
+                    }
+                }
+
+                // Posición final
                 vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                
-                // Tamaño depende de la profundidad (perspectiva) y atributo random
-                gl_PointSize = uSize * aScale * (30.0 / -mvPosition.z);
-                
                 gl_Position = projectionMatrix * mvPosition;
                 
-                // Pasar datos al fragment shader
-                // Color varía sutilmente con la profundidad
-                vColor = vec3(1.0); 
+                // Tamaño basado en profundidad
+                gl_PointSize = (6.0 * aRandom + 4.0) * (20.0 / -mvPosition.z);
+
+                vColor = finalColor;
+                vAlpha = 0.6 + 0.4 * sin(uTime * 2.0 + aRandom * 10.0);
             }
         `;
 
-        // Fragment Shader: Dibuja el círculo suave y colorea
         const fragmentShader = `
-            uniform vec3 uColor1;
-            uniform vec3 uColor2;
-
             varying vec3 vColor;
-            varying float vDistanceToHand;
+            varying float vAlpha;
 
             void main() {
-                // Crear partícula circular suave
                 vec2 coord = gl_PointCoord - vec2(0.5);
                 float dist = length(coord);
-                
-                // Descartar píxeles fuera del círculo
                 if (dist > 0.5) discard;
 
-                // Glow radial (más brillante en el centro)
-                float alpha = 1.0 - (dist * 2.0);
-                alpha = pow(alpha, 1.5); // Suavizado
-
-                // Mezcla de color base
-                vec3 finalColor = mix(uColor1, uColor2, dist);
-
-                gl_FragColor = vec4(finalColor, alpha);
+                // Soft glow
+                float strength = pow(1.0 - dist * 2.0, 2.0);
+                
+                gl_FragColor = vec4(vColor, vAlpha * strength);
             }
         `;
 
         // ==========================================
-        // INICIALIZACIÓN DE ESCENA (THREE.JS)
+        // FUNCIONES DE GEOMETRÍA
         // ==========================================
-        function initScene() {
-            const container = document.createElement('div');
-            document.body.appendChild(container);
+        
+        function getSpherePoint() {
+            const r = 10 * Math.cbrt(Math.random()); // Distribución volumétrica uniforme
+            const theta = Math.random() * 2 * Math.PI;
+            const phi = Math.acos(2 * Math.random() - 1);
+            return {
+                x: r * Math.sin(phi) * Math.cos(theta),
+                y: r * Math.sin(phi) * Math.sin(theta),
+                z: r * Math.cos(phi)
+            };
+        }
 
-            scene = new THREE.Scene();
-            // Niebla ligera para profundidad
-            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+        function getCubePoint() {
+            const size = 12;
+            return {
+                x: (Math.random() - 0.5) * size,
+                y: (Math.random() - 0.5) * size,
+                z: (Math.random() - 0.5) * size
+            };
+        }
 
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
-            camera.position.z = 15;
-            camera.position.y = 5;
-
-            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-            renderer.setPixelRatio(window.devicePixelRatio);
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setClearColor(0x000000);
-            container.appendChild(renderer.domElement);
-
-            // Controles orbitales (automáticos luego)
-            controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-            controls.autoRotate = true;
-            controls.autoRotateSpeed = 0.5;
-
-            window.addEventListener('resize', onWindowResize);
+        function getTorusPoint() {
+            const R = 8; // Radio mayor
+            const r = 3; // Radio del tubo
+            const u = Math.random() * 2 * Math.PI;
+            const v = Math.random() * 2 * Math.PI;
+            // Dispersión dentro del volumen
+            const r_vol = r * Math.sqrt(Math.random()); 
+            
+            return {
+                x: (R + r_vol * Math.cos(v)) * Math.cos(u),
+                y: (R + r_vol * Math.cos(v)) * Math.sin(u),
+                z: r_vol * Math.sin(v)
+            };
         }
 
         // ==========================================
-        // SISTEMA DE PARTÍCULAS
+        // CORE
         // ==========================================
-        function initParticles() {
-            if (points) scene.remove(points);
 
-            const count = config.particleCount;
-            const geometry = new THREE.BufferGeometry();
+        function init() {
+            // Escena
+            scene = new THREE.Scene();
+            scene.fog = new THREE.FogExp2(0x050505, 0.02);
             
-            const positions = new Float32Array(count * 3);
-            const scales = new Float32Array(count);
-            const randomness = new Float32Array(count * 3);
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
+            camera.position.z = 25;
 
-            const radius = 10;
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(window.devicePixelRatio);
+            document.body.appendChild(renderer.domElement);
 
-            for (let i = 0; i < count; i++) {
-                // Generar nube esférica
-                const r = radius * Math.cbrt(Math.random());
-                const theta = Math.random() * 2 * Math.PI;
-                const phi = Math.acos(2 * Math.random() - 1);
+            new OrbitControls(camera, renderer.domElement);
 
-                const x = r * Math.sin(phi) * Math.cos(theta);
-                const y = r * Math.sin(phi) * Math.sin(theta);
-                const z = r * Math.cos(phi);
+            // Generar Partículas con múltiples atributos
+            const geometry = new THREE.BufferGeometry();
+            const count = config.count;
+            
+            const posSphere = [];
+            const posCube = [];
+            const posTorus = [];
+            const randoms = [];
 
-                positions[i * 3] = x;
-                positions[i * 3 + 1] = y;
-                positions[i * 3 + 2] = z;
+            for(let i=0; i<count; i++) {
+                const s = getSpherePoint();
+                posSphere.push(s.x, s.y, s.z);
 
-                scales[i] = Math.random();
-                randomness[i * 3] = Math.random();
-                randomness[i * 3 + 1] = Math.random();
-                randomness[i * 3 + 2] = Math.random();
+                const c = getCubePoint();
+                posCube.push(c.x, c.y, c.z);
+
+                const t = getTorusPoint();
+                posTorus.push(t.x, t.y, t.z);
+
+                randoms.push(Math.random());
             }
 
-            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-            geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
-            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randomness, 3));
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(posSphere, 3)); // Inicial
+            geometry.setAttribute('aPosSphere', new THREE.Float32BufferAttribute(posSphere, 3));
+            geometry.setAttribute('aPosCube', new THREE.Float32BufferAttribute(posCube, 3));
+            geometry.setAttribute('aPosTorus', new THREE.Float32BufferAttribute(posTorus, 3));
+            geometry.setAttribute('aRandom', new THREE.Float32BufferAttribute(randoms, 1));
 
             material = new THREE.ShaderMaterial({
                 uniforms: {
                     uTime: { value: 0 },
-                    uSize: { value: 8.0 * window.devicePixelRatio },
-                    uColor1: { value: config.baseColor },
-                    uColor2: { value: config.secondaryColor },
-                    uHand1Pos: { value: new THREE.Vector3(0,0,0) },
-                    uHand1State: { value: 0.0 },
-                    uHand1Active: { value: 0.0 },
-                    uHand2Pos: { value: new THREE.Vector3(0,0,0) },
-                    uHand2State: { value: 0.0 },
-                    uHand2Active: { value: 0.0 },
-                    uForceStrength: { value: config.forceStrength }
+                    uMorphFactor: { value: 0 },
+                    uShapeType: { value: 0 },
+                    // Hands
+                    uHandLPos: { value: new THREE.Vector3() },
+                    uHandLActive: { value: 0 },
+                    uHandLGesture: { value: 0 },
+                    uHandLPinch: { value: 0 },
+                    
+                    uHandRPos: { value: new THREE.Vector3() },
+                    uHandRActive: { value: 0 },
+                    uHandRGesture: { value: 0 },
+                    uHandRPinch: { value: 0 },
                 },
                 vertexShader: vertexShader,
                 fragmentShader: fragmentShader,
@@ -328,195 +449,216 @@
 
             points = new THREE.Points(geometry, material);
             scene.add(points);
+
+            window.addEventListener('resize', () => {
+                camera.aspect = window.innerWidth/window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+
+            initMediaPipe();
+            animate();
         }
 
         // ==========================================
-        // HAND TRACKING (MEDIAPIPE)
+        // IA & GESTOS
         // ==========================================
-        function initHandTracking() {
-            const videoElement = document.getElementById('video-input');
-            
-            // Configuración de MediaPipe Hands
-            const hands = new Hands({locateFile: (file) => {
-                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-            }});
 
+        function initMediaPipe() {
+            const video = document.getElementById('video-input');
+            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
+            
             hands.setOptions({
                 maxNumHands: 2,
-                modelComplexity: 1, // 0 = Lite, 1 = Full (mejor)
-                minDetectionConfidence: 0.5,
-                minTrackingConfidence: 0.5
+                modelComplexity: 1,
+                minDetectionConfidence: 0.6,
+                minTrackingConfidence: 0.6
             });
 
-            hands.onResults(onHandsResults);
+            hands.onResults(processHands);
 
-            // Iniciar cámara
-            const cameraUtils = new Camera(videoElement, {
-                onFrame: async () => {
-                    await hands.send({image: videoElement});
-                },
-                width: 640,
-                height: 480
+            const cam = new Camera(video, {
+                onFrame: async () => { await hands.send({image: video}); },
+                width: 640, height: 480
             });
-
-            cameraUtils.start()
-                .then(() => {
-                    document.getElementById('status').innerText = "Sistema Activo. Muestra tus manos.";
-                    document.getElementById('status').className = "status";
-                })
-                .catch(err => {
-                    document.getElementById('status').innerText = "Error de cámara: " + err;
-                    console.error(err);
-                });
+            cam.start().then(() => document.getElementById('loader').style.display = 'none');
         }
 
-        // Procesar resultados de MediaPipe
-        function onHandsResults(results) {
-            // Resetear estado
-            config.hand1.active = 0;
-            config.hand2.active = 0;
+        function processHands(results) {
+            // Reset active states
+            handsData.left.active = 0;
+            handsData.right.active = 0;
 
-            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
-                
-                results.multiHandLandmarks.forEach((landmarks, index) => {
-                    // Obtener coordenadas normalizadas (0 a 1)
-                    // MediaPipe: x (0 izq -> 1 der), y (0 arriba -> 1 abajo)
-                    // Three.js world (aprox): x (-10 a 10), y (10 a -10)
+            if (results.multiHandLandmarks) {
+                results.multiHandLandmarks.forEach((landmarks, i) => {
+                    const label = results.multiHandedness[i].label; // "Left" or "Right"
                     
-                    // Mapeo simple de coordenadas 2D a plano 3D
-                    // Usamos el landmark 9 (base del dedo medio) como centro de la mano
-                    const palm = landmarks[9]; 
-                    
-                    // Cálculo aproximado de proyección pantalla -> mundo
-                    // Invertimos X porque la cámara suele estar en espejo
-                    const x = (0.5 - palm.x) * 25; 
-                    const y = (0.5 - palm.y) * 15;
-                    const z = (palm.z) * -10; // Profundidad relativa
+                    // Mapeo de coordenadas (Pantalla -> 3D World)
+                    const palm = landmarks[9];
+                    const x = (0.5 - palm.x) * 35;
+                    const y = (0.5 - palm.y) * 20;
+                    const z = 0; // Simplificado al plano Z=0 para mejor control
 
-                    // Detección de gesto (Abierto vs Cerrado)
-                    // Distancia entre punta del índice (8) y pulgar (4)
-                    const thumb = landmarks[4];
+                    // 1. Detectar Gesto: PUÑO (Fist)
+                    // Si las puntas de los dedos están cerca de la palma
+                    const wrist = landmarks[0];
+                    const tips = [12, 16, 20]; // Middle, Ring, Pinky
+                    let avgDist = 0;
+                    tips.forEach(idx => {
+                        avgDist += Math.hypot(landmarks[idx].x - wrist.x, landmarks[idx].y - wrist.y);
+                    });
+                    const isFist = (avgDist / 3) < 0.15 ? 1 : 0;
+
+                    // 2. Detectar Gesto: PELLIZCO (Pinch)
+                    const thumbTip = landmarks[4];
                     const indexTip = landmarks[8];
-                    const distance = Math.hypot(thumb.x - indexTip.x, thumb.y - indexTip.y);
-                    
-                    // Umbral empírico: < 0.05 es cerrado (puño/pinza), > 0.05 es abierto
-                    const isClosed = distance < 0.08 ? 1.0 : 0.0;
+                    const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
+                    const isPinch = pinchDist < 0.05 ? 1 : 0;
 
-                    if (index === 0) {
-                        config.hand1.x = x;
-                        config.hand1.y = y;
-                        config.hand1.active = 1.0;
-                        config.hand1.state = isClosed;
-                    } else if (index === 1) {
-                        config.hand2.x = x;
-                        config.hand2.y = y;
-                        config.hand2.active = 1.0;
-                        config.hand2.state = isClosed;
-                    }
+                    // Asignar datos a la mano correcta
+                    // Nota: MediaPipe a veces invierte espejos, ajustamos lógica simple:
+                    // Si hay 1 mano, asumimos control principal. Si hay 2, dividimos.
+                    let targetHand = (label === 'Right') ? handsData.right : handsData.left;
+                    
+                    // Suavizado de posición (Lerp básico en JS para la UI, el shader hace el suyo)
+                    targetHand.x = x;
+                    targetHand.y = y;
+                    targetHand.active = 1;
+                    targetHand.gesture = isFist; // 1 = Puño (Attract)
+                    targetHand.pinch = isPinch;  // 1 = Pinch (Star)
                 });
+
+                updateUI();
+                checkTwoHandInteraction();
             }
         }
 
+        function checkTwoHandInteraction() {
+            // Si ambas manos están activas
+            if (handsData.left.active && handsData.right.active) {
+                const dist = Math.hypot(handsData.left.x - handsData.right.x, handsData.left.y - handsData.right.y);
+                
+                // Si se juntan (APLAUSO) y ha pasado tiempo desde el último cambio
+                if (dist < 4.0 && (time - lastShapeSwitchTime > 2.0)) {
+                    triggerShapeChange();
+                    lastShapeSwitchTime = time;
+                }
+            }
+        }
+
+        // Variables para animación de morphing
+        let targetShapeIndex = 0;
+        let currentMorphFactor = 0; // 0 a 1
+
+        function triggerShapeChange() {
+            // Ciclo: 0 -> 1 -> 2 -> 0
+            targetShapeIndex = (config.currentShapeIndex + 1) % 3;
+            
+            // Animación manual del morphing
+            // Reiniciamos el factor para animarlo en el loop
+            currentMorphFactor = 0;
+            
+            // Actualizar UI
+            const names = ['ESFERA', 'CUBO', 'TOROIDE'];
+            document.getElementById('shape-name').innerText = names[targetShapeIndex];
+            document.getElementById('shape-name').style.color = '#ff0055';
+            setTimeout(() => document.getElementById('shape-name').style.color = '#fff', 500);
+        }
+
+        function updateUI() {
+            // Update HUD text/icons based on state
+            const updatePanel = (prefix, data) => {
+                const txt = document.getElementById(prefix + '-gesture');
+                const led = document.getElementById(prefix + '-led');
+                
+                if(!data.active) {
+                    txt.innerText = "No detectada";
+                    led.className = "gesture-icon";
+                } else if(data.pinch) {
+                    txt.innerText = "PELLIZCO (Estrella)";
+                    txt.style.color = "#ffaa00";
+                    led.className = "gesture-icon active-gesture";
+                    led.style.backgroundColor = "#ffaa00";
+                } else if(data.gesture) {
+                    txt.innerText = "PUÑO (Absorber)";
+                    txt.style.color = "#ff0055";
+                    led.className = "gesture-icon active-gesture";
+                    led.style.backgroundColor = "#ff0055";
+                } else {
+                    txt.innerText = "ABIERTA (Escudo)";
+                    txt.style.color = "#00ffcc";
+                    led.className = "gesture-icon active-gesture";
+                    led.style.backgroundColor = "#00ffcc";
+                }
+            };
+
+            updatePanel('l', handsData.left);
+            updatePanel('r', handsData.right);
+        }
+
         // ==========================================
-        // LOOP PRINCIPAL
+        // ANIMACIÓN
         // ==========================================
+        let fpsTime = 0;
+        let frames = 0;
+
         function animate() {
             requestAnimationFrame(animate);
-
             time += 0.01;
-            
-            if (material) {
-                material.uniforms.uTime.value = time;
-                material.uniforms.uForceStrength.value = config.forceStrength;
 
-                // Suavizado del movimiento de la mano (LERP para evitar saltos bruscos)
-                const lerpFactor = 0.1;
-                
-                // Mano 1
-                if (config.hand1.active) {
-                    material.uniforms.uHand1Pos.value.lerp(new THREE.Vector3(config.hand1.x, config.hand1.y, 0), lerpFactor);
-                    material.uniforms.uHand1Active.value = 1.0;
-                    // Transición suave del estado (0 a 1)
-                    material.uniforms.uHand1State.value += (config.hand1.state - material.uniforms.uHand1State.value) * 0.1;
-                } else {
-                    material.uniforms.uHand1Active.value = 0.0;
-                }
+            // Calcular FPS
+            frames++;
+            if (performance.now() - fpsTime > 1000) {
+                document.getElementById('fps-counter').innerText = frames;
+                frames = 0;
+                fpsTime = performance.now();
+            }
 
-                // Mano 2
-                if (config.hand2.active) {
-                    material.uniforms.uHand2Pos.value.lerp(new THREE.Vector3(config.hand2.x, config.hand2.y, 0), lerpFactor);
-                    material.uniforms.uHand2Active.value = 1.0;
-                    material.uniforms.uHand2State.value += (config.hand2.state - material.uniforms.uHand2State.value) * 0.1;
-                } else {
-                    material.uniforms.uHand2Active.value = 0.0;
+            // Animación Morphing
+            if (config.currentShapeIndex !== targetShapeIndex) {
+                currentMorphFactor += 0.02; // Velocidad de transformación
+                if (currentMorphFactor >= 1.0) {
+                    currentMorphFactor = 0;
+                    config.currentShapeIndex = targetShapeIndex;
                 }
             }
 
-            controls.update();
+            // Actualizar Uniforms
+            if (material) {
+                material.uniforms.uTime.value = time;
+                
+                // Lógica de Morphing para el shader
+                // Enviamos el tipo actual y el factor de progreso hacia el siguiente
+                material.uniforms.uShapeType.value = config.currentShapeIndex; 
+                material.uniforms.uMorphFactor.value = (config.currentShapeIndex !== targetShapeIndex) ? currentMorphFactor : 0.0;
+
+                // Actualizar Manos (Lerp para suavidad visual)
+                const lerp = 0.2;
+                
+                // Left
+                material.uniforms.uHandLPos.value.lerp(new THREE.Vector3(handsData.left.x, handsData.left.y, 0), lerp);
+                material.uniforms.uHandLActive.value = handsData.left.active;
+                material.uniforms.uHandLGesture.value = handsData.left.gesture;
+                material.uniforms.uHandLPinch.value = handsData.left.pinch;
+
+                // Right
+                material.uniforms.uHandRPos.value.lerp(new THREE.Vector3(handsData.right.x, handsData.right.y, 0), lerp);
+                material.uniforms.uHandRActive.value = handsData.right.active;
+                material.uniforms.uHandRGesture.value = handsData.right.gesture;
+                material.uniforms.uHandRPinch.value = handsData.right.pinch;
+            }
+
+            // Rotación suave de la cámara
+            const r = 25;
+            camera.position.x = r * Math.sin(time * 0.1);
+            camera.position.z = r * Math.cos(time * 0.1);
+            camera.lookAt(0,0,0);
+
             renderer.render(scene, camera);
         }
 
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        // ==========================================
-        // LÓGICA DE UI
-        // ==========================================
-        function initUI() {
-            // Slider Cantidad
-            const pCountSlider = document.getElementById('particleCount');
-            const countDisplay = document.getElementById('countValue');
-            pCountSlider.addEventListener('change', (e) => {
-                config.particleCount = parseInt(e.target.value);
-                countDisplay.innerText = config.particleCount;
-                initParticles(); // Reiniciar sistema
-            });
-
-            // Slider Fuerza
-            const forceSlider = document.getElementById('forceStrength');
-            forceSlider.addEventListener('input', (e) => {
-                config.forceStrength = parseFloat(e.target.value);
-            });
-
-            // Selector Color
-            const colorSelect = document.getElementById('colorScheme');
-            colorSelect.addEventListener('change', (e) => {
-                switch(e.target.value) {
-                    case 'cyan':
-                        config.baseColor.setHex(0x00d2ff);
-                        config.secondaryColor.setHex(0x0044ff);
-                        break;
-                    case 'fire':
-                        config.baseColor.setHex(0xffaa00);
-                        config.secondaryColor.setHex(0xff0000);
-                        break;
-                    case 'matrix':
-                        config.baseColor.setHex(0x00ff00);
-                        config.secondaryColor.setHex(0x003300);
-                        break;
-                    case 'white':
-                        config.baseColor.setHex(0xffffff);
-                        config.secondaryColor.setHex(0xaaaaaa);
-                        break;
-                }
-                if(material) {
-                    material.uniforms.uColor1.value = config.baseColor;
-                    material.uniforms.uColor2.value = config.secondaryColor;
-                }
-            });
-        }
-
-        // ==========================================
-        // ARRANQUE
-        // ==========================================
-        initScene();
-        initParticles();
-        initUI();
-        initHandTracking(); // Puede tardar unos segundos en cargar el modelo
-        animate();
+        // Iniciar
+        init();
 
     </script>
 </body>
