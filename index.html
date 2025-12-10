@@ -1,665 +1,716 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Advanced Particle Gestures</title>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Advanced Particle Gestures — Mejora</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #050505; font-family: 'Segoe UI', sans-serif; }
-        canvas { display: block; }
-        
+        body { margin: 0; overflow: hidden; background: #050505; font-family: "Segoe UI", Roboto, sans-serif; }
+        canvas { display:block; }
+
         #ui-overlay {
             position: absolute;
-            top: 20px;
-            left: 20px;
-            pointer-events: none; /* Dejar pasar clicks al canvas si fuera necesario */
-            z-index: 10;
+            top: 18px;
+            left: 18px;
+            z-index: 20;
+            pointer-events: none;
         }
-
         .hud-panel {
-            background: rgba(10, 20, 30, 0.85);
+            background: linear-gradient(180deg, rgba(12,18,24,0.9), rgba(8,12,16,0.75));
             border-left: 3px solid #00ffcc;
-            padding: 15px 25px;
-            color: #fff;
-            backdrop-filter: blur(8px);
+            padding: 12px 18px;
+            color: #ddd;
+            width: 300px;
             margin-bottom: 10px;
-            width: 280px;
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.1);
-            font-size: 0.9rem;
             border-radius: 0 10px 10px 0;
-            transition: all 0.3s ease;
+            box-shadow: 0 8px 30px rgba(0,0,0,0.6);
+            backdrop-filter: blur(6px);
         }
-
-        h2 { margin: 0 0 10px 0; font-size: 1.1rem; color: #00ffcc; text-transform: uppercase; letter-spacing: 2px; }
-        .data-row { display: flex; justify-content: space-between; margin-bottom: 5px; color: #aaa; }
-        .data-val { color: #fff; font-weight: bold; }
-        
-        .gesture-icon {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            border-radius: 50%;
-            background: #333;
-            margin-right: 5px;
-        }
-        .active-gesture { background: #00ffcc; box-shadow: 0 0 10px #00ffcc; }
+        h2 { margin:0 0 8px 0; font-size: 0.95rem; color: #00ffcc; letter-spacing:1px; }
+        .data-row { display:flex; justify-content:space-between; margin-bottom:6px; color:#bdbdbd; }
+        .data-val { color:#fff; font-weight:700; }
+        .gesture-icon { width:10px; height:10px; border-radius:50%; background:#222; display:inline-block; margin-left:8px; box-shadow:0 0 6px rgba(0,0,0,0.6);}
+        .active { box-shadow:0 0 12px; }
 
         #tutorial {
-            position: absolute;
-            bottom: 30px;
-            width: 100%;
-            text-align: center;
-            color: rgba(255,255,255,0.6);
-            pointer-events: none;
-            font-size: 0.9rem;
-            text-shadow: 0 0 5px rgba(0,0,0,0.8);
+            position:absolute;
+            bottom: 22px;
+            left:50%;
+            transform:translateX(-50%);
+            color: rgba(255,255,255,0.75);
+            font-size:0.9rem;
+            pointer-events:none;
+            text-shadow: 0 2px 12px rgba(0,0,0,0.6);
+            z-index:10;
         }
-        
-        .key { color: #00ffcc; font-weight: bold; }
 
-        #video-input { display: none; transform: scaleX(-1); }
-        
-        /* Animación de carga */
         #loader {
-            position: absolute;
-            top: 50%; left: 50%;
-            transform: translate(-50%, -50%);
-            color: #00ffcc;
-            font-size: 1.5rem;
-            text-transform: uppercase;
-            letter-spacing: 5px;
-            animation: pulse 1.5s infinite;
+            position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+            color:#00ffcc; font-weight:700; letter-spacing:3px;
         }
-        @keyframes pulse { 0% { opacity: 0.5; } 50% { opacity: 1; } 100% { opacity: 0.5; } }
+
+        .hint { color:#00ffcc; font-weight:700; }
     </style>
 </head>
 <body>
-
     <div id="loader">Inicializando Neural Core...</div>
 
     <div id="ui-overlay">
         <div class="hud-panel">
             <h2>Estado del Sistema</h2>
-            <div class="data-row"><span>Partículas</span> <span class="data-val">60,000</span></div>
-            <div class="data-row"><span>Geometría</span> <span class="data-val" id="shape-name">ESFERA</span></div>
-            <div class="data-row"><span>FPS</span> <span class="data-val" id="fps-counter">60</span></div>
+            <div class="data-row"><span>Partículas</span><span class="data-val" id="particle-count">60,000</span></div>
+            <div class="data-row"><span>Geometría</span><span class="data-val" id="shape-name">ESFERA</span></div>
+            <div class="data-row"><span>FPS</span><span class="data-val" id="fps-counter">--</span></div>
         </div>
 
         <div class="hud-panel">
             <h2>Mano Izquierda</h2>
-            <div class="data-row"><span id="l-gesture">Detectando...</span> <div id="l-led" class="gesture-icon"></div></div>
+            <div class="data-row"><span id="l-gesture">No detectada</span><span><div id="l-led" class="gesture-icon"></div></span></div>
+            <div class="data-row"><span>Zoom/Escala</span><span id="l-info" style="color:#bdbdbd">—</span></div>
         </div>
 
         <div class="hud-panel">
             <h2>Mano Derecha</h2>
-            <div class="data-row"><span id="r-gesture">Detectando...</span> <div id="r-led" class="gesture-icon"></div></div>
+            <div class="data-row"><span id="r-gesture">No detectada</span><span><div id="r-led" class="gesture-icon"></div></span></div>
+            <div class="data-row"><span>Acción</span><span id="r-info" style="color:#bdbdbd">—</span></div>
         </div>
     </div>
 
     <div id="tutorial">
-        <span class="key">PUÑO:</span> Absorber | 
-        <span class="key">MANO ABIERTA:</span> Escudo | 
-        <span class="key">PELLIZCO:</span> Crear Estrella | 
-        <span class="key">JUNTAR MANOS:</span> Cambiar Forma
+        <span class="hint">PUÑO</span>: Absorber (zoom in) — 
+        <span class="hint">MANO ABIERTA</span>: Repulsión / Escudo (alejar) — 
+        <span class="hint">PELLIZCO</span>: Pulso / Crear Estrella — 
+        <span class="hint">MANOS JUNTAS</span>: Cambiar Forma
     </div>
 
-    <video id="video-input"></video>
+    <video id="video-input" playsinline style="display:none;transform:scaleX(-1)"></video>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
     </script>
 
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin></script>
 
     <script type="module">
-        import * as THREE from 'three';
-        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-        // CONFIGURACIÓN
-        const config = {
-            count: 60000,
-            shapes: ['SPHERE', 'CUBE', 'TORUS'],
-            currentShapeIndex: 0,
-            handInteractionThreshold: 0.15, // Distancia para juntar manos
-            colors: {
-                base: new THREE.Color(0x00ffcc),
-                accent: new THREE.Color(0xaa00ff),
-                pinch: new THREE.Color(0xffaa00)
-            }
-        };
+    // ----------------------------
+    // CONFIG
+    // ----------------------------
+    const config = {
+        count: 60000,               // manténlo o baja para móvil
+        shapes: ['SPHERE', 'CUBE', 'TORUS'],
+        currentShapeIndex: 0,
+        smoothPosAlpha: 0.12,      // suavizado de posición de manos (0..1)
+        hysteresisFrames: 6,       // cuántos frames sostenidos para confirmar gesto
+        handInteractionRadius: 6.0,
+        colors: {
+            base: new THREE.Color(0x00ffcc),
+            accent: new THREE.Color(0xaa00ff),
+            pinch: new THREE.Color(0xffcc33)
+        },
+        maxPointSize: 26,
+        minPointSize: 2
+    };
 
-        let scene, camera, renderer, material, points;
-        let time = 0;
-        let lastShapeSwitchTime = 0;
+    // ----------------------------
+    // UTILS (easing, clamp)
+    // ----------------------------
+    const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+    const lerp = (a,b,t) => a + (b-a)*t;
+    const easeInOutCubic = t => t<0.5 ? 4*t*t*t : 1 - Math.pow(-2*t+2,3)/2;
 
-        // Estado de Manos
-        const handsData = {
-            left: { x: 0, y: 0, active: 0, gesture: 0, pinch: 0 }, // Gesture: 0=Open, 1=Fist. Pinch: 0=No, 1=Yes
-            right: { x: 0, y: 0, active: 0, gesture: 0, pinch: 0 }
-        };
+    // ----------------------------
+    // ESTADO
+    // ----------------------------
+    let scene, camera, renderer, material, points;
+    let lastTime = performance.now()/1000;
+    let time = 0;
+    let lastShapeSwitchTime = -10;
+    let targetShapeIndex = 0;
+    let morphProgress = 0;
 
-        // --- SHADERS AVANZADOS ---
+    // manos: guardamos estado con suavizado y contadores para hysteresis
+    const handsData = {
+        left: { pos: new THREE.Vector3(), target: new THREE.Vector3(), active: 0, gesture: 0, pinch: 0, fistCount:0, pinchCount:0 },
+        right: { pos: new THREE.Vector3(), target: new THREE.Vector3(), active: 0, gesture: 0, pinch: 0, fistCount:0, pinchCount:0 }
+    };
 
-        const vertexShader = `
-            uniform float uTime;
-            uniform float uMorphFactor; // 0 to 1 transition
-            uniform float uShapeType;   // 0, 1, 2
-            
-            // Hand Uniforms
-            uniform vec3 uHandLPos;
-            uniform float uHandLActive;
-            uniform float uHandLGesture; // 0=Open (Repel), 1=Fist (Attract)
-            uniform float uHandLPinch;   // 1=Pinch (Gravity point)
+    // efectos temporales
+    const pinchPulse = { left: 0, right: 0 }; // 0..1 decays
 
-            uniform vec3 uHandRPos;
-            uniform float uHandRActive;
-            uniform float uHandRGesture;
-            uniform float uHandRPinch;
+    // ----------------------------
+    // SHADERS (mejorados, con explicaciones)
+    // ----------------------------
+    const vertexShader = `
+        uniform float uTime;
+        uniform float uMorphFactor;   // easing factor 0..1
+        uniform float uShapeType;     // 0,1,2
+        uniform float uGlobalScale;   // escala global de la forma
+        uniform float uPointBaseSize;
+        uniform vec3 uHandLPos;
+        uniform float uHandLActive;
+        uniform float uHandLGesture; // 1 = fist
+        uniform float uHandLPinch;   // pulse strength 0..1
+        uniform vec3 uHandRPos;
+        uniform float uHandRActive;
+        uniform float uHandRGesture;
+        uniform float uHandRPinch;
 
-            attribute vec3 aPosSphere;
-            attribute vec3 aPosCube;
-            attribute vec3 aPosTorus;
-            attribute float aRandom;
+        attribute vec3 aPosSphere;
+        attribute vec3 aPosCube;
+        attribute vec3 aPosTorus;
+        attribute float aRandom;
 
-            varying vec3 vColor;
-            varying float vAlpha;
+        varying vec3 vColor;
+        varying float vAlpha;
 
-            // Simplex Noise auxiliar
-            vec3 mod289(vec3 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-            vec4 mod289(vec4 x) { return x - floor(x * (1.0 / 289.0)) * 289.0; }
-            vec4 permute(vec4 x) { return mod289(((x*34.0)+1.0)*x); }
-            vec4 taylorInvSqrt(vec4 r) { return 1.79284291400159 - 0.85373472095314 * r; }
-            float snoise(vec3 v) {
-                const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
-                const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
-                vec3 i  = floor(v + dot(v, C.yyy) );
-                vec3 x0 = v - i + dot(i, C.xxx) ;
-                vec3 g = step(x0.yzx, x0.xyz);
-                vec3 l = 1.0 - g;
-                vec3 i1 = min( g.xyz, l.zxy );
-                vec3 i2 = max( g.xyz, l.zxy );
-                vec3 x1 = x0 - i1 + C.xxx;
-                vec3 x2 = x0 - i2 + C.yyy;
-                vec3 x3 = x0 - D.yyy;
-                i = mod289(i);
-                vec4 p = permute( permute( permute(
-                            i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
-                        + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
-                        + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
-                float n_ = 0.142857142857;
-                vec3  ns = n_ * D.wyz - D.xzx;
-                vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
-                vec4 x_ = floor(j * ns.z);
-                vec4 y_ = floor(j - 7.0 * x_ );
-                vec4 x = x_ *ns.x + ns.yyyy;
-                vec4 y = y_ *ns.x + ns.yyyy;
-                vec4 h = 1.0 - abs(x) - abs(y);
-                vec4 b0 = vec4( x.xy, y.xy );
-                vec4 b1 = vec4( x.zw, y.zw );
-                vec4 s0 = floor(b0)*2.0 + 1.0;
-                vec4 s1 = floor(b1)*2.0 + 1.0;
-                vec4 sh = -step(h, vec4(0.0));
-                vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
-                vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
-                vec3 p0 = vec3(a0.xy,h.x);
-                vec3 p1 = vec3(a0.zw,h.y);
-                vec3 p2 = vec3(a1.xy,h.z);
-                vec3 p3 = vec3(a1.zw,h.w);
-                vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
-                p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
-                vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
-                m = m * m;
-                return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
-            }
+        // -- noise (simplex + curl) --
+        // (copiado y reducido: suficiente para movimiento fluido)
+        vec3 mod289(vec3 x){ return x - floor(x*(1.0/289.0))*289.0; }
+        vec4 mod289(vec4 x){ return x - floor(x*(1.0/289.0))*289.0; }
+        vec4 permute(vec4 x){ return mod289(((x*34.0)+1.0)*x); }
+        vec4 taylorInvSqrt(vec4 r){ return 1.79284291400159 - 0.85373472095314*r; }
 
-            // Curl Noise para movimiento fluido
-            vec3 curlNoise(vec3 p) {
-                float e = 0.1;
-                float n1 = snoise(p + vec3(e, 0, 0));
-                float n2 = snoise(p + vec3(-e, 0, 0));
-                float n3 = snoise(p + vec3(0, e, 0));
-                float n4 = snoise(p + vec3(0, -e, 0));
-                float n5 = snoise(p + vec3(0, 0, e));
-                float n6 = snoise(p + vec3(0, 0, -e));
-                return vec3(n3 - n4 - (n5 - n6), n5 - n6 - (n1 - n2), n1 - n2 - (n3 - n4));
-            }
-
-            void main() {
-                // 1. MORPHING DE GEOMETRÍA
-                // Seleccionamos la posición base interpolando entre las figuras
-                vec3 basePos = aPosSphere;
-                vec3 targetPos = aPosSphere;
-                
-                // Lógica de mezcla cíclica simple (Sphere -> Cube -> Torus)
-                // Usamos un enfoque simplificado para el demo:
-                // Si uShapeType está cerca de 0: Sphere, 1: Cube, 2: Torus
-                // Interpolamos suavemente usando uMorphFactor (que irá de 0 a 1)
-                
-                // Determinar origen y destino basado en uShapeType entero
-                if(uShapeType < 0.5) { // 0: Sphere -> Cube
-                    basePos = aPosSphere; targetPos = aPosCube;
-                } else if (uShapeType < 1.5) { // 1: Cube -> Torus
-                    basePos = aPosCube; targetPos = aPosTorus;
-                } else { // 2: Torus -> Sphere
-                    basePos = aPosTorus; targetPos = aPosSphere;
-                }
-                
-                vec3 pos = mix(basePos, targetPos, uMorphFactor);
-
-                // 2. RUIDO ORGÁNICO
-                // Añadir turbulencia fluida
-                vec3 noise = curlNoise(pos * 0.1 + uTime * 0.2);
-                pos += noise * 0.5;
-
-                // 3. COLOR BASE
-                vec3 finalColor = vec3(0.0, 0.8, 0.9); // Cyan base
-                
-                // 4. INTERACCIÓN CON MANOS
-                
-                // --- MANO IZQUIERDA ---
-                if (uHandLActive > 0.5) {
-                    float d = distance(pos, uHandLPos);
-                    float influence = smoothstep(6.0, 0.0, d); // Radio 6
-                    
-                    if (influence > 0.0) {
-                        if (uHandLPinch > 0.5) {
-                            // PINCH: Gravedad fuerte y localizada + cambio de color
-                            vec3 dir = uHandLPos - pos;
-                            pos += dir * influence * 0.8; // Atracción fuerte
-                            finalColor = mix(finalColor, vec3(1.0, 0.6, 0.0), influence); // Naranja
-                        } else if (uHandLGesture > 0.5) {
-                            // PUÑO: Agujero Negro (Succión masiva)
-                            vec3 dir = normalize(uHandLPos - pos);
-                            pos += dir * influence * 5.0 * (1.0 + sin(uTime * 10.0)*0.2); // Vibración
-                            finalColor = mix(finalColor, vec3(1.0, 0.0, 0.2), influence); // Rojo
-                        } else {
-                            // MANO ABIERTA: Repulsión (Escudo)
-                            vec3 dir = normalize(pos - uHandLPos);
-                            pos += dir * influence * 2.5; 
-                            finalColor += vec3(0.2) * influence; // Brillo blanco
-                        }
-                    }
-                }
-
-                // --- MANO DERECHA (Misma lógica) ---
-                if (uHandRActive > 0.5) {
-                    float d = distance(pos, uHandRPos);
-                    float influence = smoothstep(6.0, 0.0, d);
-                    
-                    if (influence > 0.0) {
-                        if (uHandRPinch > 0.5) {
-                            vec3 dir = uHandRPos - pos;
-                            pos += dir * influence * 0.8;
-                            finalColor = mix(finalColor, vec3(1.0, 0.6, 0.0), influence);
-                        } else if (uHandRGesture > 0.5) {
-                            vec3 dir = normalize(uHandRPos - pos);
-                            pos += dir * influence * 5.0;
-                            finalColor = mix(finalColor, vec3(1.0, 0.0, 0.2), influence);
-                        } else {
-                            vec3 dir = normalize(pos - uHandRPos);
-                            pos += dir * influence * 2.5;
-                        }
-                    }
-                }
-
-                // Posición final
-                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
-                gl_Position = projectionMatrix * mvPosition;
-                
-                // Tamaño basado en profundidad
-                gl_PointSize = (6.0 * aRandom + 4.0) * (20.0 / -mvPosition.z);
-
-                vColor = finalColor;
-                vAlpha = 0.6 + 0.4 * sin(uTime * 2.0 + aRandom * 10.0);
-            }
-        `;
-
-        const fragmentShader = `
-            varying vec3 vColor;
-            varying float vAlpha;
-
-            void main() {
-                vec2 coord = gl_PointCoord - vec2(0.5);
-                float dist = length(coord);
-                if (dist > 0.5) discard;
-
-                // Soft glow
-                float strength = pow(1.0 - dist * 2.0, 2.0);
-                
-                gl_FragColor = vec4(vColor, vAlpha * strength);
-            }
-        `;
-
-        // ==========================================
-        // FUNCIONES DE GEOMETRÍA
-        // ==========================================
-        
-        function getSpherePoint() {
-            const r = 10 * Math.cbrt(Math.random()); // Distribución volumétrica uniforme
-            const theta = Math.random() * 2 * Math.PI;
-            const phi = Math.acos(2 * Math.random() - 1);
-            return {
-                x: r * Math.sin(phi) * Math.cos(theta),
-                y: r * Math.sin(phi) * Math.sin(theta),
-                z: r * Math.cos(phi)
-            };
+        float snoise(vec3 v){
+            const vec2 C = vec2(1.0/6.0, 1.0/3.0);
+            const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+            vec3 i = floor(v + dot(v, C.yyy));
+            vec3 x0 = v - i + dot(i, C.xxx);
+            vec3 g = step(x0.yzx, x0.xyz);
+            vec3 l = 1.0 - g;
+            vec3 i1 = min( g.xyz, l.zxy );
+            vec3 i2 = max( g.xyz, l.zxy );
+            vec3 x1 = x0 - i1 + C.xxx;
+            vec3 x2 = x0 - i2 + C.yyy;
+            vec3 x3 = x0 - D.yyy;
+            i = mod289(i);
+            vec4 p = permute( permute( permute(
+                        i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+                    + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+                    + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+            float n_ = 0.142857142857;
+            vec3 ns = n_ * D.wyz - D.xzx;
+            vec4 j = p - 49.0 * floor(p * ns.z * ns.z);
+            vec4 x_ = floor(j * ns.z);
+            vec4 y_ = floor(j - 7.0 * x_ );
+            vec4 x = x_ * ns.x + ns.yyyy;
+            vec4 y = y_ * ns.x + ns.yyyy;
+            vec4 h = 1.0 - abs(x) - abs(y);
+            vec4 b0 = vec4( x.xy, y.xy );
+            vec4 b1 = vec4( x.zw, y.zw );
+            vec4 s0 = floor(b0)*2.0 + 1.0;
+            vec4 s1 = floor(b1)*2.0 + 1.0;
+            vec4 sh = -step(h, vec4(0.0));
+            vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+            vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+            vec3 p0 = vec3(a0.xy, h.x);
+            vec3 p1 = vec3(a0.zw, h.y);
+            vec3 p2 = vec3(a1.xy, h.z);
+            vec3 p3 = vec3(a1.zw, h.w);
+            vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+            p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+            vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+            m = m * m;
+            return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3) ) );
         }
 
-        function getCubePoint() {
-            const size = 12;
-            return {
-                x: (Math.random() - 0.5) * size,
-                y: (Math.random() - 0.5) * size,
-                z: (Math.random() - 0.5) * size
-            };
+        vec3 curlNoise(vec3 p){
+            float e = 0.1;
+            float nx = snoise(p + vec3(e, 0, 0));
+            float nx2 = snoise(p - vec3(e, 0, 0));
+            float ny = snoise(p + vec3(0, e, 0));
+            float ny2 = snoise(p - vec3(0, e, 0));
+            float nz = snoise(p + vec3(0, 0, e));
+            float nz2 = snoise(p - vec3(0, 0, e));
+            return vec3(ny - ny2 - (nz - nz2), nz - nz2 - (nx - nx2), nx - nx2 - (ny - ny2));
         }
 
-        function getTorusPoint() {
-            const R = 8; // Radio mayor
-            const r = 3; // Radio del tubo
-            const u = Math.random() * 2 * Math.PI;
-            const v = Math.random() * 2 * Math.PI;
-            // Dispersión dentro del volumen
-            const r_vol = r * Math.sqrt(Math.random()); 
-            
-            return {
-                x: (R + r_vol * Math.cos(v)) * Math.cos(u),
-                y: (R + r_vol * Math.cos(v)) * Math.sin(u),
-                z: r_vol * Math.sin(v)
-            };
-        }
+        void main(){
+            // --- Elegir puntos base según forma ---
+            vec3 baseA = aPosSphere;
+            vec3 baseB = aPosCube;
+            vec3 baseC = aPosTorus;
+            vec3 src = baseA;
+            vec3 dst = baseB;
 
-        // ==========================================
-        // CORE
-        // ==========================================
+            if (uShapeType < 0.5) { src = baseA; dst = baseB; }
+            else if (uShapeType < 1.5) { src = baseB; dst = baseC; }
+            else { src = baseC; dst = baseA; }
 
-        function init() {
-            // Escena
-            scene = new THREE.Scene();
-            scene.fog = new THREE.FogExp2(0x050505, 0.02);
-            
-            camera = new THREE.PerspectiveCamera(60, window.innerWidth/window.innerHeight, 0.1, 100);
-            camera.position.z = 25;
+            // Morph aplicado con easing para evitar saltos bruscos
+            float morph = uMorphFactor;
+            morph = morph * morph * (3.0 - 2.0 * morph); // smoothstep-like
+            vec3 pos = mix(src, dst, morph);
 
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.setPixelRatio(window.devicePixelRatio);
-            document.body.appendChild(renderer.domElement);
+            // Escala global y micro-variaciones
+            pos *= uGlobalScale;
 
-            new OrbitControls(camera, renderer.domElement);
+            // Movimiento orgánico suave con curl noise (escala baja)
+            vec3 n = curlNoise(pos * 0.08 + uTime * 0.12);
+            pos += n * 0.45 * (0.5 + aRandom * 0.6);
 
-            // Generar Partículas con múltiples atributos
-            const geometry = new THREE.BufferGeometry();
-            const count = config.count;
-            
-            const posSphere = [];
-            const posCube = [];
-            const posTorus = [];
-            const randoms = [];
-
-            for(let i=0; i<count; i++) {
-                const s = getSpherePoint();
-                posSphere.push(s.x, s.y, s.z);
-
-                const c = getCubePoint();
-                posCube.push(c.x, c.y, c.z);
-
-                const t = getTorusPoint();
-                posTorus.push(t.x, t.y, t.z);
-
-                randoms.push(Math.random());
-            }
-
-            geometry.setAttribute('position', new THREE.Float32BufferAttribute(posSphere, 3)); // Inicial
-            geometry.setAttribute('aPosSphere', new THREE.Float32BufferAttribute(posSphere, 3));
-            geometry.setAttribute('aPosCube', new THREE.Float32BufferAttribute(posCube, 3));
-            geometry.setAttribute('aPosTorus', new THREE.Float32BufferAttribute(posTorus, 3));
-            geometry.setAttribute('aRandom', new THREE.Float32BufferAttribute(randoms, 1));
-
-            material = new THREE.ShaderMaterial({
-                uniforms: {
-                    uTime: { value: 0 },
-                    uMorphFactor: { value: 0 },
-                    uShapeType: { value: 0 },
-                    // Hands
-                    uHandLPos: { value: new THREE.Vector3() },
-                    uHandLActive: { value: 0 },
-                    uHandLGesture: { value: 0 },
-                    uHandLPinch: { value: 0 },
-                    
-                    uHandRPos: { value: new THREE.Vector3() },
-                    uHandRActive: { value: 0 },
-                    uHandRGesture: { value: 0 },
-                    uHandRPinch: { value: 0 },
-                },
-                vertexShader: vertexShader,
-                fragmentShader: fragmentShader,
-                transparent: true,
-                depthWrite: false,
-                blending: THREE.AdditiveBlending
-            });
-
-            points = new THREE.Points(geometry, material);
-            scene.add(points);
-
-            window.addEventListener('resize', () => {
-                camera.aspect = window.innerWidth/window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-            });
-
-            initMediaPipe();
-            animate();
-        }
-
-        // ==========================================
-        // IA & GESTOS
-        // ==========================================
-
-        function initMediaPipe() {
-            const video = document.getElementById('video-input');
-            const hands = new Hands({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`});
-            
-            hands.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.6,
-                minTrackingConfidence: 0.6
-            });
-
-            hands.onResults(processHands);
-
-            const cam = new Camera(video, {
-                onFrame: async () => { await hands.send({image: video}); },
-                width: 640, height: 480
-            });
-            cam.start().then(() => document.getElementById('loader').style.display = 'none');
-        }
-
-        function processHands(results) {
-            // Reset active states
-            handsData.left.active = 0;
-            handsData.right.active = 0;
-
-            if (results.multiHandLandmarks) {
-                results.multiHandLandmarks.forEach((landmarks, i) => {
-                    const label = results.multiHandedness[i].label; // "Left" or "Right"
-                    
-                    // Mapeo de coordenadas (Pantalla -> 3D World)
-                    const palm = landmarks[9];
-                    const x = (0.5 - palm.x) * 35;
-                    const y = (0.5 - palm.y) * 20;
-                    const z = 0; // Simplificado al plano Z=0 para mejor control
-
-                    // 1. Detectar Gesto: PUÑO (Fist)
-                    // Si las puntas de los dedos están cerca de la palma
-                    const wrist = landmarks[0];
-                    const tips = [12, 16, 20]; // Middle, Ring, Pinky
-                    let avgDist = 0;
-                    tips.forEach(idx => {
-                        avgDist += Math.hypot(landmarks[idx].x - wrist.x, landmarks[idx].y - wrist.y);
-                    });
-                    const isFist = (avgDist / 3) < 0.15 ? 1 : 0;
-
-                    // 2. Detectar Gesto: PELLIZCO (Pinch)
-                    const thumbTip = landmarks[4];
-                    const indexTip = landmarks[8];
-                    const pinchDist = Math.hypot(thumbTip.x - indexTip.x, thumbTip.y - indexTip.y);
-                    const isPinch = pinchDist < 0.05 ? 1 : 0;
-
-                    // Asignar datos a la mano correcta
-                    // Nota: MediaPipe a veces invierte espejos, ajustamos lógica simple:
-                    // Si hay 1 mano, asumimos control principal. Si hay 2, dividimos.
-                    let targetHand = (label === 'Right') ? handsData.right : handsData.left;
-                    
-                    // Suavizado de posición (Lerp básico en JS para la UI, el shader hace el suyo)
-                    targetHand.x = x;
-                    targetHand.y = y;
-                    targetHand.active = 1;
-                    targetHand.gesture = isFist; // 1 = Puño (Attract)
-                    targetHand.pinch = isPinch;  // 1 = Pinch (Star)
-                });
-
-                updateUI();
-                checkTwoHandInteraction();
-            }
-        }
-
-        function checkTwoHandInteraction() {
-            // Si ambas manos están activas
-            if (handsData.left.active && handsData.right.active) {
-                const dist = Math.hypot(handsData.left.x - handsData.right.x, handsData.left.y - handsData.right.y);
-                
-                // Si se juntan (APLAUSO) y ha pasado tiempo desde el último cambio
-                if (dist < 4.0 && (time - lastShapeSwitchTime > 2.0)) {
-                    triggerShapeChange();
-                    lastShapeSwitchTime = time;
-                }
-            }
-        }
-
-        // Variables para animación de morphing
-        let targetShapeIndex = 0;
-        let currentMorphFactor = 0; // 0 a 1
-
-        function triggerShapeChange() {
-            // Ciclo: 0 -> 1 -> 2 -> 0
-            targetShapeIndex = (config.currentShapeIndex + 1) % 3;
-            
-            // Animación manual del morphing
-            // Reiniciamos el factor para animarlo en el loop
-            currentMorphFactor = 0;
-            
-            // Actualizar UI
-            const names = ['ESFERA', 'CUBO', 'TOROIDE'];
-            document.getElementById('shape-name').innerText = names[targetShapeIndex];
-            document.getElementById('shape-name').style.color = '#ff0055';
-            setTimeout(() => document.getElementById('shape-name').style.color = '#fff', 500);
-        }
-
-        function updateUI() {
-            // Update HUD text/icons based on state
-            const updatePanel = (prefix, data) => {
-                const txt = document.getElementById(prefix + '-gesture');
-                const led = document.getElementById(prefix + '-led');
-                
-                if(!data.active) {
-                    txt.innerText = "No detectada";
-                    led.className = "gesture-icon";
-                } else if(data.pinch) {
-                    txt.innerText = "PELLIZCO (Estrella)";
-                    txt.style.color = "#ffaa00";
-                    led.className = "gesture-icon active-gesture";
-                    led.style.backgroundColor = "#ffaa00";
-                } else if(data.gesture) {
-                    txt.innerText = "PUÑO (Absorber)";
-                    txt.style.color = "#ff0055";
-                    led.className = "gesture-icon active-gesture";
-                    led.style.backgroundColor = "#ff0055";
+            // Interacción con manos: influencia suave + pow para dar sensación "física"
+            float radius =  uGlobalScale * ${config.handInteractionRadius.toFixed(1)};
+            // Left
+            if (uHandLActive > 0.5) {
+                float d = distance(pos, uHandLPos);
+                float inf = clamp(1.0 - smoothstep(0.0, radius, d), 0.0, 1.0);
+                inf = pow(inf, 1.5); // caída rápida
+                if (uHandLPinch > 0.01) {
+                    // PINCH: atracción potente y pulso de brillo
+                    vec3 dir = (uHandLPos - pos);
+                    pos += dir * inf * 0.95;
+                    // color handled below via mix
+                } else if (uHandLGesture > 0.5) {
+                    // FIST: Succión (atracción intensa, ligera vibración)
+                    vec3 dir = normalize(uHandLPos - pos);
+                    pos += dir * inf * 4.0 * (0.9 + 0.1 * sin(uTime * 18.0 + aRandom*10.0));
                 } else {
-                    txt.innerText = "ABIERTA (Escudo)";
-                    txt.style.color = "#00ffcc";
-                    led.className = "gesture-icon active-gesture";
-                    led.style.backgroundColor = "#00ffcc";
-                }
-            };
-
-            updatePanel('l', handsData.left);
-            updatePanel('r', handsData.right);
-        }
-
-        // ==========================================
-        // ANIMACIÓN
-        // ==========================================
-        let fpsTime = 0;
-        let frames = 0;
-
-        function animate() {
-            requestAnimationFrame(animate);
-            time += 0.01;
-
-            // Calcular FPS
-            frames++;
-            if (performance.now() - fpsTime > 1000) {
-                document.getElementById('fps-counter').innerText = frames;
-                frames = 0;
-                fpsTime = performance.now();
-            }
-
-            // Animación Morphing
-            if (config.currentShapeIndex !== targetShapeIndex) {
-                currentMorphFactor += 0.02; // Velocidad de transformación
-                if (currentMorphFactor >= 1.0) {
-                    currentMorphFactor = 0;
-                    config.currentShapeIndex = targetShapeIndex;
+                    // OPEN: repulsión (escudo)
+                    vec3 dir = normalize(pos - uHandLPos);
+                    pos += dir * inf * 2.3;
                 }
             }
 
-            // Actualizar Uniforms
-            if (material) {
-                material.uniforms.uTime.value = time;
-                
-                // Lógica de Morphing para el shader
-                // Enviamos el tipo actual y el factor de progreso hacia el siguiente
-                material.uniforms.uShapeType.value = config.currentShapeIndex; 
-                material.uniforms.uMorphFactor.value = (config.currentShapeIndex !== targetShapeIndex) ? currentMorphFactor : 0.0;
-
-                // Actualizar Manos (Lerp para suavidad visual)
-                const lerp = 0.2;
-                
-                // Left
-                material.uniforms.uHandLPos.value.lerp(new THREE.Vector3(handsData.left.x, handsData.left.y, 0), lerp);
-                material.uniforms.uHandLActive.value = handsData.left.active;
-                material.uniforms.uHandLGesture.value = handsData.left.gesture;
-                material.uniforms.uHandLPinch.value = handsData.left.pinch;
-
-                // Right
-                material.uniforms.uHandRPos.value.lerp(new THREE.Vector3(handsData.right.x, handsData.right.y, 0), lerp);
-                material.uniforms.uHandRActive.value = handsData.right.active;
-                material.uniforms.uHandRGesture.value = handsData.right.gesture;
-                material.uniforms.uHandRPinch.value = handsData.right.pinch;
+            // Right (misma lógica)
+            if (uHandRActive > 0.5) {
+                float d = distance(pos, uHandRPos);
+                float inf = clamp(1.0 - smoothstep(0.0, radius, d), 0.0, 1.0);
+                inf = pow(inf, 1.5);
+                if (uHandRPinch > 0.01) {
+                    vec3 dir = (uHandRPos - pos);
+                    pos += dir * inf * 0.95;
+                } else if (uHandRGesture > 0.5) {
+                    vec3 dir = normalize(uHandRPos - pos);
+                    pos += dir * inf * 4.0;
+                } else {
+                    vec3 dir = normalize(pos - uHandRPos);
+                    pos += dir * inf * 2.3;
+                }
             }
 
-            // Rotación suave de la cámara
-            const r = 25;
-            camera.position.x = r * Math.sin(time * 0.1);
-            camera.position.z = r * Math.cos(time * 0.1);
-            camera.lookAt(0,0,0);
+            // Posición final en espacio de cámara
+            vec4 mv = modelViewMatrix * vec4(pos, 1.0);
+            gl_Position = projectionMatrix * mv;
 
-            renderer.render(scene, camera);
+            // Tamaño: basado en profundidad y aleatorio, con límites
+            float sizeFactor = uPointBaseSize * (1.0 + aRandom*0.6);
+            float depthScale = clamp(20.0 / -mv.z, 0.6, 6.0);
+            gl_PointSize = clamp(sizeFactor * depthScale, ${config.minPointSize.toFixed(1)}, ${config.maxPointSize.toFixed(1)});
+
+            // Color dinámico: base cyan, se tiñe según interacción / pinch pulses
+            vColor = vec3(0.0, 0.82, 0.9);
+
+            // Añadir color por pinch pulses y por fist (rojo)
+            float pinchEffect = max(uHandLPinch, uHandRPinch);
+            float fistEffect = max(uHandLGesture * uHandLActive, uHandRGesture * uHandRActive);
+
+            vColor = mix(vColor, vec3(1.0, 0.72, 0.2), pinchEffect); // dorado al pellizcar
+            vColor = mix(vColor, vec3(1.0, 0.18, 0.35), fistEffect * 0.6); // rojo cuando puño
+            vAlpha = 0.55 + 0.35 * sin(uTime*2.0 + aRandom*6.0) + pinchEffect * 0.6;
+        }
+    `;
+
+    const fragmentShader = `
+        varying vec3 vColor;
+        varying float vAlpha;
+
+        void main(){
+            vec2 uv = gl_PointCoord - vec2(0.5);
+            float d = length(uv);
+            if (d > 0.5) discard;
+
+            float core = smoothstep(0.45, 0.0, d);
+            float glow = pow(max(0.0, 1.0 - d*2.0), 2.0);
+            vec3 col = vColor * (0.7 + 0.3 * core) + vColor * 0.4 * glow;
+            gl_FragColor = vec4(col, vAlpha * core);
+        }
+    `;
+
+    // ----------------------------
+    // GEOMETRIA (puntos base)
+    // ----------------------------
+    function getSpherePoint() {
+        const r = 10 * Math.cbrt(Math.random());
+        const theta = Math.random() * Math.PI * 2;
+        const phi = Math.acos(2*Math.random()-1);
+        return new THREE.Vector3(
+            r * Math.sin(phi) * Math.cos(theta),
+            r * Math.sin(phi) * Math.sin(theta),
+            r * Math.cos(phi)
+        );
+    }
+    function getCubePoint() {
+        const s = 12;
+        return new THREE.Vector3(
+            (Math.random()-0.5)*s,
+            (Math.random()-0.5)*s,
+            (Math.random()-0.5)*s
+        );
+    }
+    function getTorusPoint() {
+        const R = 8, r = 3;
+        const u = Math.random()*Math.PI*2, v = Math.random()*Math.PI*2;
+        const r_vol = r * Math.sqrt(Math.random());
+        return new THREE.Vector3(
+            (R + r_vol * Math.cos(v)) * Math.cos(u),
+            (R + r_vol * Math.cos(v)) * Math.sin(u),
+            r_vol * Math.sin(v)
+        );
+    }
+
+    // ----------------------------
+    // INIT
+    // ----------------------------
+    function init(){
+        // escena y cámara
+        scene = new THREE.Scene();
+        scene.fog = new THREE.FogExp2(0x050505, 0.02);
+
+        camera = new THREE.PerspectiveCamera(60, innerWidth/innerHeight, 0.1, 200);
+        camera.position.set(0, 0, 25);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+        renderer.setSize(innerWidth, innerHeight);
+        renderer.setPixelRatio(devicePixelRatio);
+        document.body.appendChild(renderer.domElement);
+
+        // controles suaves para explorar cuando no hay manos
+        const controls = new OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.07;
+        controls.enablePan = false;
+        controls.minDistance = 10;
+        controls.maxDistance = 80;
+
+        // BufferGeometry con múltiples atributos
+        const geometry = new THREE.BufferGeometry();
+        const cnt = config.count;
+        const aPosSphere = new Float32Array(cnt*3);
+        const aPosCube = new Float32Array(cnt*3);
+        const aPosTorus = new Float32Array(cnt*3);
+        const aRandom = new Float32Array(cnt);
+
+        for (let i=0;i<cnt;i++){
+            const s = getSpherePoint();
+            const c = getCubePoint();
+            const t = getTorusPoint();
+            aPosSphere[i*3] = s.x; aPosSphere[i*3+1] = s.y; aPosSphere[i*3+2] = s.z;
+            aPosCube[i*3] = c.x; aPosCube[i*3+1] = c.y; aPosCube[i*3+2] = c.z;
+            aPosTorus[i*3] = t.x; aPosTorus[i*3+1] = t.y; aPosTorus[i*3+2] = t.z;
+            aRandom[i] = Math.random();
         }
 
-        // Iniciar
-        init();
+        geometry.setAttribute('aPosSphere', new THREE.BufferAttribute(aPosSphere, 3));
+        geometry.setAttribute('aPosCube', new THREE.BufferAttribute(aPosCube, 3));
+        geometry.setAttribute('aPosTorus', new THREE.BufferAttribute(aPosTorus, 3));
+        geometry.setAttribute('aRandom', new THREE.BufferAttribute(aRandom, 1));
 
+        material = new THREE.ShaderMaterial({
+            uniforms: {
+                uTime: { value: 0 },
+                uMorphFactor: { value: 0 },
+                uShapeType: { value: 0 },
+                uGlobalScale: { value: 1.0 },
+                uPointBaseSize: { value: 6.0 },
+                // manos
+                uHandLPos: { value: new THREE.Vector3(0,0,0) },
+                uHandLActive: { value: 0 },
+                uHandLGesture: { value: 0 },
+                uHandLPinch: { value: 0 },
+                uHandRPos: { value: new THREE.Vector3(0,0,0) },
+                uHandRActive: { value: 0 },
+                uHandRGesture: { value: 0 },
+                uHandRPinch: { value: 0 }
+            },
+            vertexShader,
+            fragmentShader,
+            transparent: true,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending
+        });
+
+        points = new THREE.Points(geometry, material);
+        scene.add(points);
+
+        // responsive
+        window.addEventListener('resize', onResize);
+
+        initMediaPipe();
+        animate();
+    }
+
+    function onResize(){
+        camera.aspect = innerWidth/innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(innerWidth, innerHeight);
+    }
+
+    // ----------------------------
+    // MEDIAPIPE HANDS + GESTURE LOGIC (suavizado + hysteresis)
+    // ----------------------------
+    function initMediaPipe(){
+        const video = document.getElementById('video-input');
+
+        const hands = new Hands({ locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${f}` });
+        hands.setOptions({
+            maxNumHands: 2,
+            modelComplexity: 1,
+            minDetectionConfidence: 0.6,
+            minTrackingConfidence: 0.6
+        });
+        hands.onResults(onHands);
+
+        const cam = new Camera(video, {
+            onFrame: async () => { await hands.send({ image: video }); },
+            width: 640, height: 480
+        });
+        cam.start().then(()=> document.getElementById('loader').style.display = 'none');
+    }
+
+    function onHands(results){
+        // marcar inactivos por defecto
+        handsData.left.active = 0;
+        handsData.right.active = 0;
+
+        if (!results.multiHandLandmarks) {
+            updateUI();
+            return;
+        }
+
+        // procesar cada mano detectada
+        results.multiHandLandmarks.forEach((landmarks, i) => {
+            const handed = (results.multiHandedness && results.multiHandedness[i]) ? results.multiHandedness[i].label : 'Right';
+            // tomamos palma como referencia (landmark 9)
+            const palm = landmarks[9];
+            // mapa a coordenadas 3D de mundo (ajusta escalas para sentir natural)
+            const x = (0.5 - palm.x) * 35;
+            const y = (0.5 - palm.y) * 20;
+            const z = 0;
+
+            // detección simple de puño: distancia media dedos - muñeca
+            const wrist = landmarks[0];
+            const tips = [8, 12, 16, 20]; // index,middle,ring,pinky
+            let avgDist = 0;
+            tips.forEach(idx => {
+                avgDist += Math.hypot(landmarks[idx].x - wrist.x, landmarks[idx].y - wrist.y);
+            });
+            avgDist /= tips.length;
+            const isFist = avgDist < 0.15 ? 1 : 0;
+
+            // pellizco: pulgar (4) vs índice (8)
+            const thumb = landmarks[4];
+            const indexF = landmarks[8];
+            const pinchDist = Math.hypot(thumb.x - indexF.x, thumb.y - indexF.y);
+            const isPinch = pinchDist < 0.05 ? 1 : 0;
+
+            const handKey = (handed === 'Right') ? 'right' : 'left';
+            const hd = handsData[handKey];
+
+            // actualizar target pos (sin suavizar todavía)
+            hd.target.set(x, y, z);
+            hd.active = 1;
+
+            // hysteresis counters: para evitar flicker necesitamos N frames
+            if (isFist) hd.fistCount++; else hd.fistCount = Math.max(0, hd.fistCount - 1);
+            if (isPinch) hd.pinchCount++; else hd.pinchCount = Math.max(0, hd.pinchCount - 1);
+
+            const confirmFist = hd.fistCount >= config.hysteresisFrames;
+            const confirmPinch = hd.pinchCount >= config.hysteresisFrames;
+
+            // fijamos valores de gesto (0/1)
+            hd.gesture = confirmFist ? 1 : 0;
+            // Si pinch confirmado y no estaba activo antes: lanzamos pulso
+            if (confirmPinch && hd.pinch === 0) {
+                // disparar pulso visual
+                if (handKey === 'left') pinchPulse.left = 1.0;
+                else pinchPulse.right = 1.0;
+            }
+            hd.pinch = confirmPinch ? 1 : 0;
+
+            // guardamos active
+            hd.active = 1;
+        });
+
+        updateUI();
+    }
+
+    // ----------------------------
+    // LÓGICA DE INTERACCIÓN ENTRE MANOS (JUNTAR MANOS)
+    // ----------------------------
+    function checkHandsTogether(delta){
+        if (handsData.left.active && handsData.right.active){
+            const dx = handsData.left.target.x - handsData.right.target.x;
+            const dy = handsData.left.target.y - handsData.right.target.y;
+            const dist = Math.hypot(dx, dy);
+
+            // si se juntan y ha pasado tiempo suficiente -> cambiar forma
+            if (dist < 4.0 && (time - lastShapeSwitchTime) > 1.2) {
+                lastShapeSwitchTime = time;
+                triggerShapeChange();
+            }
+        }
+    }
+
+    function triggerShapeChange(){
+        targetShapeIndex = (config.currentShapeIndex + 1) % 3;
+        document.getElementById('shape-name').innerText = ['ESFERA','CUBO','TOROIDE'][targetShapeIndex];
+        // feedback visual rápido (cambio color breve)
+        const nameEl = document.getElementById('shape-name');
+        nameEl.style.color = '#ff66aa';
+        setTimeout(()=> nameEl.style.color = '#fff', 420);
+    }
+
+    // ----------------------------
+    // UI UPDATE
+    // ----------------------------
+    function updateUI(){
+        const updatePanel = (prefix, data) => {
+            const t = document.getElementById(prefix + '-gesture');
+            const led = document.getElementById(prefix + '-led');
+            const info = document.getElementById(prefix + '-info');
+
+            if (!data.active) {
+                t.innerText = "No detectada";
+                t.style.color = '#bdbdbd';
+                led.style.background = '#222';
+                led.classList.remove('active');
+                info.innerText = '—';
+            } else if (data.pinch) {
+                t.innerText = "PELLIZCO (Pulso)";
+                t.style.color = '#ffcc66';
+                led.style.background = '#ffcc66';
+                led.classList.add('active');
+                info.innerText = 'Pulso brillante';
+            } else if (data.gesture) {
+                t.innerText = "PUÑO (Absorber)";
+                t.style.color = '#ff5577';
+                led.style.background = '#ff5577';
+                led.classList.add('active');
+                info.innerText = 'Atracción/Zoom in';
+            } else {
+                t.innerText = "ABIERTA (Escudo)";
+                t.style.color = '#00ffcc';
+                led.style.background = '#00ffcc';
+                led.classList.add('active');
+                info.innerText = 'Repulsión / Alejar';
+            }
+        };
+
+        updatePanel('l', handsData.left);
+        updatePanel('r', handsData.right);
+    }
+
+    // ----------------------------
+    // ANIMATE LOOP
+    // ----------------------------
+    let frames = 0, fpsTimer = performance.now(), lastFps = 0;
+    function animate(){
+        requestAnimationFrame(animate);
+        const now = performance.now()/1000;
+        const delta = clamp(now - lastTime, 0, 0.05);
+        lastTime = now;
+        time += delta;
+
+        // FPS
+        frames++;
+        if (performance.now() - fpsTimer > 1000) {
+            lastFps = frames;
+            document.getElementById('fps-counter').innerText = String(lastFps);
+            frames = 0;
+            fpsTimer = performance.now();
+        }
+
+        // suavizado de manos: lerp hacia target
+        const alpha = config.smoothPosAlpha;
+        ['left','right'].forEach(k=>{
+            const h = handsData[k];
+            h.pos.lerp(h.target, alpha);
+        });
+
+        // comprobar interacción manos-juntas
+        checkHandsTogether(delta);
+
+        // morph smoothing hacia targetShapeIndex con easing
+        if (config.currentShapeIndex !== targetShapeIndex){
+            morphProgress += delta * 0.9; // velocidad del morph
+            const eased = easeInOutCubic(clamp(morphProgress, 0, 1));
+            material.uniforms.uMorphFactor.value = eased;
+            if (morphProgress >= 1.0){
+                morphProgress = 0;
+                material.uniforms.uMorphFactor.value = 0;
+                config.currentShapeIndex = targetShapeIndex;
+            }
+        } else {
+            material.uniforms.uMorphFactor.value = 0.0;
+        }
+        material.uniforms.uShapeType.value = config.currentShapeIndex;
+
+        // actualizar uniforms de manos (incluyendo suavizado y decay de pinchPulse)
+        // decay de pinch pulses
+        pinchPulse.left *= 0.94;
+        pinchPulse.right *= 0.94;
+
+        // mapear a uniforms
+        // left
+        material.uniforms.uHandLPos.value.lerp(handsData.left.pos, 0.16);
+        material.uniforms.uHandLActive.value = handsData.left.active;
+        material.uniforms.uHandLGesture.value = handsData.left.gesture;
+        // combinamos pinch confirmado con pulse para un efecto de 'golpe'
+        material.uniforms.uHandLPinch.value = Math.max(handsData.left.pinch, pinchPulse.left);
+
+        // right
+        material.uniforms.uHandRPos.value.lerp(handsData.right.pos, 0.16);
+        material.uniforms.uHandRActive.value = handsData.right.active;
+        material.uniforms.uHandRGesture.value = handsData.right.gesture;
+        material.uniforms.uHandRPinch.value = Math.max(handsData.right.pinch, pinchPulse.right);
+
+        // Parámetros globales controlados por distancia/gestos => zoom/escala intuitiva
+        // Si ambas manos activas, el zoom se basa en la distancia entre ambas: manos separadas = alejar, juntas = acercar
+        if (handsData.left.active && handsData.right.active){
+            const dx = handsData.left.pos.x - handsData.right.pos.x;
+            const dy = handsData.left.pos.y - handsData.right.pos.y;
+            const dist = Math.hypot(dx, dy);
+            // map dist ~ [2..40] -> zoomFactor [1.6 .. 0.8]
+            const zoomTarget = clamp(1.6 - (dist/36.0), 0.7, 1.8);
+            // camera dolly effect: acercar si manos juntas, alejar si separadas
+            camera.position.z = lerp(camera.position.z, 20.0 * zoomTarget, 0.08);
+            // escala global del objeto
+            material.uniforms.uGlobalScale.value = lerp(material.uniforms.uGlobalScale.value, 1.0 + (1.2 - zoomTarget)*0.9, 0.06);
+        } else {
+            // si no hay ambas manos, read default slowly
+            camera.position.z = lerp(camera.position.z, 25.0, 0.04);
+            material.uniforms.uGlobalScale.value = lerp(material.uniforms.uGlobalScale.value, 1.0, 0.03);
+        }
+
+        // también: si mano con PUÑO -> acercar levemente (zoom-in)
+        if (handsData.left.gesture || handsData.right.gesture){
+            camera.position.z = lerp(camera.position.z, 14.0, 0.06);
+            material.uniforms.uPointBaseSize.value = lerp(material.uniforms.uPointBaseSize.value, 9.0, 0.08);
+        } else {
+            material.uniforms.uPointBaseSize.value = lerp(material.uniforms.uPointBaseSize.value, 6.0, 0.05);
+        }
+
+        // pequeño movimiento orbital suave para darle vida cuando no se manipula
+        camera.position.x = Math.sin(time * 0.07) * 25.0 * 0.9;
+        camera.position.y = Math.sin(time * 0.03) * 2.0;
+        camera.lookAt(0,0,0);
+
+        // render
+        material.uniforms.uTime.value = time;
+        renderer.render(scene, camera);
+    }
+
+    // ----------------------------
+    // START
+    // ----------------------------
+    init();
     </script>
 </body>
 </html>
+
