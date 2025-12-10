@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Futuristic Particle Hand Control</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000; font-family: 'Segoe UI', sans-serif; }
+        canvas { display: block; }
+        
+        /* UI Overlay */
+        #ui-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 20, 40, 0.8);
+            border: 1px solid #00d2ff;
+            padding: 20px;
+            border-radius: 8px;
+            color: #fff;
+            backdrop-filter: blur(5px);
+            width: 280px;
+            box-shadow: 0 0 15px rgba(0, 210, 255, 0.2);
+            z-index: 10;
+        }
+
+        h2 { margin-top: 0; font-size: 1.2rem; color: #00d2ff; text-transform: uppercase; letter-spacing: 1px; }
+        
+        .control-group { margin-bottom: 15px; }
+        label { display: block; font-size: 0.9rem; margin-bottom: 5px; color: #aaa; }
+        
+        input[type="range"] { width: 100%; cursor: pointer; accent-color: #00d2ff; }
+        select { width: 100%; padding: 5px; background: #001020; color: white; border: 1px solid #444; border-radius: 4px; }
+        
+        .status { font-size: 0.8rem; margin-top: 10px; color: #00ff88; }
+        .loading { color: #ffaa00; }
+
+        /* Video oculto para MediaPipe */
+        #video-input { display: none; transform: scaleX(-1); }
+
+        /* Instrucciones */
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255,255,255,0.5);
+            pointer-events: none;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="ui-container">
+        <h2>Control de Partículas</h2>
+        
+        <div class="control-group">
+            <label for="particleCount">Densidad (Recargar para aplicar)</label>
+            <input type="range" id="particleCount" min="10000" max="100000" step="10000" value="50000">
+            <span id="countValue">50000</span>
+        </div>
+
+        <div class="control-group">
+            <label for="colorScheme">Esquema de Color</label>
+            <select id="colorScheme">
+                <option value="cyan">Cyberpunk Cyan</option>
+                <option value="fire">Solar Fire</option>
+                <option value="matrix">Matrix Green</option>
+                <option value="white">Pure Starlight</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="forceStrength">Fuerza de Interacción</label>
+            <input type="range" id="forceStrength" min="0.1" max="3.0" step="0.1" value="1.0">
+        </div>
+
+        <div id="status" class="status loading">Iniciando cámara e IA...</div>
+    </div>
+
+    <div id="instructions">
+        Mano Abierta: <b>Repeler</b> | Puño Cerrado: <b>Absorber</b> | Dos manos: <b>Caos</b>
+    </div>
+
+    <video id="video-input"></video>
+
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+        // ==========================================
+        // CONFIGURACIÓN GLOBAL
+        // ==========================================
+        const config = {
+            particleCount: 50000,
+            forceStrength: 1.0,
+            baseColor: new THREE.Color(0x00d2ff),
+            secondaryColor: new THREE.Color(0x0044ff),
+            hand1: { x: 9999, y: 9999, active: 0.0, state: 0.0 }, // state: 0=open, 1=closed
+            hand2: { x: 9999, y: 9999, active: 0.0, state: 0.0 }
+        };
+
+        let scene, camera, renderer, material, points, controls;
+        let time = 0;
+
+        // ==========================================
+        // SHADERS (GLSL)
+        // ==========================================
+        
+        // Vertex Shader: Maneja la posición y la física de "desplazamiento"
+        const vertexShader = `
+            uniform float uTime;
+            uniform float uSize;
+            uniform vec3 uHand1Pos;
+            uniform float uHand1State; // 0.0 repel (open), 1.0 attract (closed)
+            uniform float uHand1Active;
+            
+            uniform vec3 uHand2Pos;
+            uniform float uHand2State;
+            uniform float uHand2Active;
+            
+            uniform float uForceStrength;
+
+            attribute float aScale;
+            attribute vec3 aRandom; // Random values for noise
+
+            varying vec3 vColor;
+            varying float vDistanceToHand;
+
+            // Función simple de ruido pseudo-aleatorio
+            float random(vec2 st) {
+                return fract(sin(dot(st.xy, vec2(12.9898,78.233))) * 43758.5453123);
+            }
+
+            void main() {
+                vec3 pos = position;
+
+                // 1. Movimiento base orgánico (Noise field simple)
+                float noiseFreq = 0.5;
+                float noiseAmp = 0.4;
+                pos.x += sin(uTime * 0.5 + pos.y * noiseFreq) * noiseAmp;
+                pos.y += cos(uTime * 0.3 + pos.z * noiseFreq) * noiseAmp;
+                pos.z += sin(uTime * 0.4 + pos.x * noiseFreq) * noiseAmp;
+
+                // 2. Interacción con Mano 1
+                if (uHand1Active > 0.5) {
+                    float d = distance(pos, uHand1Pos);
+                    // Radio de influencia
+                    float radius = 5.0; 
+                    
+                    if (d < radius) {
+                        float force = (radius - d) / radius; // 1.0 en el centro, 0.0 en el borde
+                        force = pow(force, 2.0) * uForceStrength * 3.0;
+
+                        if (uHand1State > 0.5) {
+                            // PUÑO CERRADO: Atracción (Absorber)
+                            // Interpolamos hacia la mano
+                            pos = mix(pos, uHand1Pos, force * 0.1);
+                        } else {
+                            // MANO ABIERTA: Repulsión
+                            vec3 dir = normalize(pos - uHand1Pos);
+                            pos += dir * force;
+                        }
+                    }
+                    vDistanceToHand = d;
+                }
+
+                // 2. Interacción con Mano 2 (Idéntica lógica)
+                if (uHand2Active > 0.5) {
+                    float d = distance(pos, uHand2Pos);
+                    float radius = 5.0;
+                    if (d < radius) {
+                        float force = (radius - d) / radius;
+                        force = pow(force, 2.0) * uForceStrength * 3.0;
+                        if (uHand2State > 0.5) {
+                            pos = mix(pos, uHand2Pos, force * 0.1);
+                        } else {
+                            vec3 dir = normalize(pos - uHand2Pos);
+                            pos += dir * force;
+                        }
+                    }
+                }
+
+                vec4 mvPosition = modelViewMatrix * vec4(pos, 1.0);
+                
+                // Tamaño depende de la profundidad (perspectiva) y atributo random
+                gl_PointSize = uSize * aScale * (30.0 / -mvPosition.z);
+                
+                gl_Position = projectionMatrix * mvPosition;
+                
+                // Pasar datos al fragment shader
+                // Color varía sutilmente con la profundidad
+                vColor = vec3(1.0); 
+            }
+        `;
+
+        // Fragment Shader: Dibuja el círculo suave y colorea
+        const fragmentShader = `
+            uniform vec3 uColor1;
+            uniform vec3 uColor2;
+
+            varying vec3 vColor;
+            varying float vDistanceToHand;
+
+            void main() {
+                // Crear partícula circular suave
+                vec2 coord = gl_PointCoord - vec2(0.5);
+                float dist = length(coord);
+                
+                // Descartar píxeles fuera del círculo
+                if (dist > 0.5) discard;
+
+                // Glow radial (más brillante en el centro)
+                float alpha = 1.0 - (dist * 2.0);
+                alpha = pow(alpha, 1.5); // Suavizado
+
+                // Mezcla de color base
+                vec3 finalColor = mix(uColor1, uColor2, dist);
+
+                gl_FragColor = vec4(finalColor, alpha);
+            }
+        `;
+
+        // ==========================================
+        // INICIALIZACIÓN DE ESCENA (THREE.JS)
+        // ==========================================
+        function initScene() {
+            const container = document.createElement('div');
+            document.body.appendChild(container);
+
+            scene = new THREE.Scene();
+            // Niebla ligera para profundidad
+            scene.fog = new THREE.FogExp2(0x000000, 0.02);
+
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 15;
+            camera.position.y = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setClearColor(0x000000);
+            container.appendChild(renderer.domElement);
+
+            // Controles orbitales (automáticos luego)
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            controls.autoRotate = true;
+            controls.autoRotateSpeed = 0.5;
+
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        // ==========================================
+        // SISTEMA DE PARTÍCULAS
+        // ==========================================
+        function initParticles() {
+            if (points) scene.remove(points);
+
+            const count = config.particleCount;
+            const geometry = new THREE.BufferGeometry();
+            
+            const positions = new Float32Array(count * 3);
+            const scales = new Float32Array(count);
+            const randomness = new Float32Array(count * 3);
+
+            const radius = 10;
+
+            for (let i = 0; i < count; i++) {
+                // Generar nube esférica
+                const r = radius * Math.cbrt(Math.random());
+                const theta = Math.random() * 2 * Math.PI;
+                const phi = Math.acos(2 * Math.random() - 1);
+
+                const x = r * Math.sin(phi) * Math.cos(theta);
+                const y = r * Math.sin(phi) * Math.sin(theta);
+                const z = r * Math.cos(phi);
+
+                positions[i * 3] = x;
+                positions[i * 3 + 1] = y;
+                positions[i * 3 + 2] = z;
+
+                scales[i] = Math.random();
+                randomness[i * 3] = Math.random();
+                randomness[i * 3 + 1] = Math.random();
+                randomness[i * 3 + 2] = Math.random();
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('aScale', new THREE.BufferAttribute(scales, 1));
+            geometry.setAttribute('aRandom', new THREE.BufferAttribute(randomness, 3));
+
+            material = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTime: { value: 0 },
+                    uSize: { value: 8.0 * window.devicePixelRatio },
+                    uColor1: { value: config.baseColor },
+                    uColor2: { value: config.secondaryColor },
+                    uHand1Pos: { value: new THREE.Vector3(0,0,0) },
+                    uHand1State: { value: 0.0 },
+                    uHand1Active: { value: 0.0 },
+                    uHand2Pos: { value: new THREE.Vector3(0,0,0) },
+                    uHand2State: { value: 0.0 },
+                    uHand2Active: { value: 0.0 },
+                    uForceStrength: { value: config.forceStrength }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
+                transparent: true,
+                depthWrite: false,
+                blending: THREE.AdditiveBlending
+            });
+
+            points = new THREE.Points(geometry, material);
+            scene.add(points);
+        }
+
+        // ==========================================
+        // HAND TRACKING (MEDIAPIPE)
+        // ==========================================
+        function initHandTracking() {
+            const videoElement = document.getElementById('video-input');
+            
+            // Configuración de MediaPipe Hands
+            const hands = new Hands({locateFile: (file) => {
+                return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+            }});
+
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1, // 0 = Lite, 1 = Full (mejor)
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(onHandsResults);
+
+            // Iniciar cámara
+            const cameraUtils = new Camera(videoElement, {
+                onFrame: async () => {
+                    await hands.send({image: videoElement});
+                },
+                width: 640,
+                height: 480
+            });
+
+            cameraUtils.start()
+                .then(() => {
+                    document.getElementById('status').innerText = "Sistema Activo. Muestra tus manos.";
+                    document.getElementById('status').className = "status";
+                })
+                .catch(err => {
+                    document.getElementById('status').innerText = "Error de cámara: " + err;
+                    console.error(err);
+                });
+        }
+
+        // Procesar resultados de MediaPipe
+        function onHandsResults(results) {
+            // Resetear estado
+            config.hand1.active = 0;
+            config.hand2.active = 0;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                
+                results.multiHandLandmarks.forEach((landmarks, index) => {
+                    // Obtener coordenadas normalizadas (0 a 1)
+                    // MediaPipe: x (0 izq -> 1 der), y (0 arriba -> 1 abajo)
+                    // Three.js world (aprox): x (-10 a 10), y (10 a -10)
+                    
+                    // Mapeo simple de coordenadas 2D a plano 3D
+                    // Usamos el landmark 9 (base del dedo medio) como centro de la mano
+                    const palm = landmarks[9]; 
+                    
+                    // Cálculo aproximado de proyección pantalla -> mundo
+                    // Invertimos X porque la cámara suele estar en espejo
+                    const x = (0.5 - palm.x) * 25; 
+                    const y = (0.5 - palm.y) * 15;
+                    const z = (palm.z) * -10; // Profundidad relativa
+
+                    // Detección de gesto (Abierto vs Cerrado)
+                    // Distancia entre punta del índice (8) y pulgar (4)
+                    const thumb = landmarks[4];
+                    const indexTip = landmarks[8];
+                    const distance = Math.hypot(thumb.x - indexTip.x, thumb.y - indexTip.y);
+                    
+                    // Umbral empírico: < 0.05 es cerrado (puño/pinza), > 0.05 es abierto
+                    const isClosed = distance < 0.08 ? 1.0 : 0.0;
+
+                    if (index === 0) {
+                        config.hand1.x = x;
+                        config.hand1.y = y;
+                        config.hand1.active = 1.0;
+                        config.hand1.state = isClosed;
+                    } else if (index === 1) {
+                        config.hand2.x = x;
+                        config.hand2.y = y;
+                        config.hand2.active = 1.0;
+                        config.hand2.state = isClosed;
+                    }
+                });
+            }
+        }
+
+        // ==========================================
+        // LOOP PRINCIPAL
+        // ==========================================
+        function animate() {
+            requestAnimationFrame(animate);
+
+            time += 0.01;
+            
+            if (material) {
+                material.uniforms.uTime.value = time;
+                material.uniforms.uForceStrength.value = config.forceStrength;
+
+                // Suavizado del movimiento de la mano (LERP para evitar saltos bruscos)
+                const lerpFactor = 0.1;
+                
+                // Mano 1
+                if (config.hand1.active) {
+                    material.uniforms.uHand1Pos.value.lerp(new THREE.Vector3(config.hand1.x, config.hand1.y, 0), lerpFactor);
+                    material.uniforms.uHand1Active.value = 1.0;
+                    // Transición suave del estado (0 a 1)
+                    material.uniforms.uHand1State.value += (config.hand1.state - material.uniforms.uHand1State.value) * 0.1;
+                } else {
+                    material.uniforms.uHand1Active.value = 0.0;
+                }
+
+                // Mano 2
+                if (config.hand2.active) {
+                    material.uniforms.uHand2Pos.value.lerp(new THREE.Vector3(config.hand2.x, config.hand2.y, 0), lerpFactor);
+                    material.uniforms.uHand2Active.value = 1.0;
+                    material.uniforms.uHand2State.value += (config.hand2.state - material.uniforms.uHand2State.value) * 0.1;
+                } else {
+                    material.uniforms.uHand2Active.value = 0.0;
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        // ==========================================
+        // LÓGICA DE UI
+        // ==========================================
+        function initUI() {
+            // Slider Cantidad
+            const pCountSlider = document.getElementById('particleCount');
+            const countDisplay = document.getElementById('countValue');
+            pCountSlider.addEventListener('change', (e) => {
+                config.particleCount = parseInt(e.target.value);
+                countDisplay.innerText = config.particleCount;
+                initParticles(); // Reiniciar sistema
+            });
+
+            // Slider Fuerza
+            const forceSlider = document.getElementById('forceStrength');
+            forceSlider.addEventListener('input', (e) => {
+                config.forceStrength = parseFloat(e.target.value);
+            });
+
+            // Selector Color
+            const colorSelect = document.getElementById('colorScheme');
+            colorSelect.addEventListener('change', (e) => {
+                switch(e.target.value) {
+                    case 'cyan':
+                        config.baseColor.setHex(0x00d2ff);
+                        config.secondaryColor.setHex(0x0044ff);
+                        break;
+                    case 'fire':
+                        config.baseColor.setHex(0xffaa00);
+                        config.secondaryColor.setHex(0xff0000);
+                        break;
+                    case 'matrix':
+                        config.baseColor.setHex(0x00ff00);
+                        config.secondaryColor.setHex(0x003300);
+                        break;
+                    case 'white':
+                        config.baseColor.setHex(0xffffff);
+                        config.secondaryColor.setHex(0xaaaaaa);
+                        break;
+                }
+                if(material) {
+                    material.uniforms.uColor1.value = config.baseColor;
+                    material.uniforms.uColor2.value = config.secondaryColor;
+                }
+            });
+        }
+
+        // ==========================================
+        // ARRANQUE
+        // ==========================================
+        initScene();
+        initParticles();
+        initUI();
+        initHandTracking(); // Puede tardar unos segundos en cargar el modelo
+        animate();
+
+    </script>
+</body>
+</html>
